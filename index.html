@@ -97,27 +97,27 @@
 <script>
 // --- 全局配置与资源 ---
 const SKY_COLOR = '#d1d1d1'; 
-const gitBase = "https://raw.githubusercontent.com/songningying-png/demo-game/refs/heads/main/";
+const gitBase = "https://raw.githubusercontent.com/songningying-png/demo-game/main/";
 const assets = {
-    bg: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/bg_0.png',
-    bg1: gitBase + 'Assets/Sprites/Scene2_RedDesert/Parallax/bg_1.png',
-    vista: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_vista2.png',
-    hand: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_hand_statue1.png',
-    building02: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building_02_full.png',
-    building03: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building_03_full.png',
-    building04: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building04_full.png', 
-    ruinsDebris: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_ruins_debris01.png',
-    mtn01: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_mountain01_mid.png',
-    mtn02: gitBase + 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_mountain02_mid.png',
+    bg: 'Assets/Sprites/Scene1_BoneRuins/Parallax/bg_0.png',
+    bg1: 'Assets/Sprites/Scene2_RedDesert/Parallax/bg_1.png',
+    vista: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_vista2.png',
+    hand: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_hand_statue1.png',
+    building02: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building_02_full.png',
+    building03: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building_03_full.png',
+    building04: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building04_full.png', 
+    ruinsDebris: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_ruins_debris01.png',
+    mtn01: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_mountain01_mid.png',
+    mtn02: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_mountain02_mid.png',
     s2_column_01: 'Assets/scene2/s2_column_01.png',
     s2_column_02: 'Assets/scene2/s2_column_02.png',
     s2_column_03: 'Assets/scene2/s2_column_03.png',
     s2_ruin_mid_01: 'Assets/scene2/s2_ruin_mid_01.png',
     s2_ruin_mid_02: 'Assets/scene2/s2_ruin_mid_02.png',
     s2_sym_building_01: 'Assets/scene2/s2_sym_building_01.png',
-    run: [1,2,3,4,5,6].map(i => gitBase + `Assets/Sprites/Player/juese_paob_0${i}.png`),
-    idle: [1,2,3].map(i => gitBase + `Assets/Sprites/Player/juese_sanshitu_0${i}.png`),
-    jump: [1,2,3,4,5,6].map(i => gitBase + `Assets/Sprites/Player/juese_tiaoyue_0${i}.png`)
+    run: [1,2,3,4,5,6].map(i => `Assets/Sprites/Player/juese_paob_0${i}.png`),
+    idle: [1,2,3].map(i => `Assets/Sprites/Player/juese_sanshitu_0${i}.png`),
+    jump: [1,2,3,4,5,6].map(i => `Assets/Sprites/Player/juese_tiaoyue_0${i}.png`)
 };
 
 const canvas = document.getElementById('gameCanvas');
