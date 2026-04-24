@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>龙骨与废墟 - 艺术强化版</title>
+    <title>尘语者 (Dust Whisper)</title>
     <style>
         body {
             margin: 0;
@@ -17,7 +17,10 @@
             width: 100vw;
             height: 100vh;
         }
-        canvas { display: block; }
+        canvas {
+            display: block;
+            object-fit: contain;
+        }
         
         #ui-layer {
             position: absolute;
@@ -44,8 +47,74 @@
             position: absolute;
             top: 0; left: 0;
         }
+        #start-screen {
+            background: #000;
+            overflow: hidden;
+        }
+        .start-screen-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .start-screen-center {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 0;
+            pointer-events: none;
+        }
+        .start-ui-btn {
+            position: absolute;
+            inset: 0;
+            border: 0;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            cursor: pointer;
+            pointer-events: auto;
+            outline: none;
+        }
+        .start-ui-btn img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
 
         #pause-screen { display: none; }
+        #ending-action-wrap {
+            position: absolute;
+            left: 50%;
+            bottom: 8%;
+            transform: translateX(-50%);
+            z-index: 160;
+            display: none;
+            pointer-events: none;
+        }
+        #ending-back-btn {
+            pointer-events: auto;
+            padding: 14px 32px;
+            border: 1px solid rgba(0,0,0,0.92);
+            background: rgba(0,0,0,0.08);
+            color: #111;
+            font-size: 20px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        #ending-back-btn:hover {
+            background: rgba(0,0,0,0.2);
+        }
 
         .btn {
             padding: 15px 40px;
@@ -61,15 +130,45 @@
             min-width: 200px;
         }
         .btn:hover { background: #fff; color: #000; }
+        #audio-debug {
+            position: fixed;
+            left: 12px;
+            bottom: 12px;
+            z-index: 220;
+            background: rgba(0,0,0,0.62);
+            color: #c8ffd5;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 8px 10px;
+            border: 1px solid rgba(200,255,213,0.35);
+            border-radius: 6px;
+            letter-spacing: 0.3px;
+            pointer-events: none;
+            min-width: 220px;
+        }
     </style>
 </head>
 <body>
 
 <div id="ui-layer">
     <div id="start-screen" class="screen-overlay">
-        <h1 style="font-weight: 100; letter-spacing: 8px;">龙骨与废墟</h1>
-        <p style="opacity: 0.6; margin-bottom: 30px;">这是一段关于寻找的旅程</p>
-        <button class="btn" onclick="initGame()">开启旅程</button>
+        <img class="start-screen-bg" src="Assets/UI/Start/ui_start_screen_01.png" alt="start screen">
+        <div class="start-screen-center">
+            <button
+                id="start-ui-btn"
+                class="start-ui-btn"
+                type="button"
+                onpointerenter="onStartButtonEnter()"
+                onpointerleave="onStartButtonLeave()"
+                onpointerdown="onStartButtonDown(event)"
+                onpointerup="onStartButtonUp(event)"
+                onkeydown="onStartButtonKeyDown(event)"
+                onclick="return false;"
+                aria-label="开始旅程"
+            >
+                <img id="start-ui-btn-img" src="Assets/UI/Start/ui_start_button_01_idle.png" alt="开始旅程">
+            </button>
+        </div>
     </div>
 
     <div id="pause-screen" class="screen-overlay">
@@ -79,24 +178,30 @@
                 <button class="btn" onclick="togglePause()">继续游戏</button>
                 <button class="btn" onclick="jumpTo(100)">重回起点</button>
                 <button class="btn" onclick="jumpTo(6000)">第一个高地</button>
-                <button class="btn" onclick="jumpTo(15250)">集成建筑03</button>
+                <button class="btn" onclick="jumpTo(terrainParams.bX3 + terrainParams.w3 * 0.5)">第二高地（b3）</button>
+                <button class="btn" onclick="jumpTo(getTerrain4Points().peak)">第四三角区</button>
                 <button class="btn" onclick="jumpTo(28500, true)">通天梯</button>
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
                 <button class="btn" onclick="jumpToScene2()">第二关</button>
                 <button class="btn" onclick="jumpToBrokenBridgeZone()">断桥坐标</button>
                 <button class="btn" onclick="jumpToZFloatingPlatformZone()">悬空平台坐标</button>
+                <button class="btn" onclick="jumpToEndpointGuideParticle()">终点引导粒子</button>
                 <button class="btn" onclick="jumpToRampTopRomanColumn()">三角斜坡顶部平台罗马柱</button>
                 <button class="btn" onclick="restartGame()">重新开始</button>
             </div>
         </div>
     </div>
+    <div id="ending-action-wrap">
+        <button id="ending-back-btn" type="button" onclick="endGameBackToStart()">结束游戏，重回开头</button>
+    </div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
+<div id="audio-debug">audio: waiting user interaction</div>
 
 <script>
-// --- 全局配置与资源 ---
+// --- 全局配置与资�?---
 const SKY_COLOR = '#d1d1d1'; 
 const gitBase = "https://raw.githubusercontent.com/songningying-png/demo-game/main/";
 const assets = {
@@ -106,7 +211,18 @@ const assets = {
     hand: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_hand_statue1.png',
     building02: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building_02_full.png',
     building03: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building_03_full.png',
-    building04: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building04_full.png', 
+    building04: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_building04_full.png',
+    b3GiantTree01: './Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_b3_giant_tree_01.png',
+    b3GiantTree02: './Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_b3_giant_tree_02.png',
+    b3FgOccluder01: './Assets/Sprites/Scene1_BoneRuins/Foreground/lv1_b3_fg_occluder_01.png',
+    lv1_cave_bg_01: './Assets/Sprites/Scene1_BoneRuins/Cave/lv1_cave_bg_01.png',
+    lv1_cave_fg_01: './Assets/Sprites/Scene1_BoneRuins/Cave/lv1_cave_fg_01.png',
+    lv1_cave_beam_left_01: './Assets/Sprites/Scene1_BoneRuins/Cave/lv1_cave_beam_left_01.png',
+    ui_start_screen_01: './Assets/UI/Start/ui_start_screen_01.png',
+    ui_start_button_01_idle: './Assets/UI/Start/ui_start_button_01_idle.png',
+    ui_start_button_01_hover: './Assets/UI/Start/ui_start_button_01_hover.png',
+    ui_start_button_01_pressed: './Assets/UI/Start/ui_start_button_01_pressed.png',
+    clouds_far: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_clouds_far.png',
     ruinsDebris: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_ruins_debris01.png',
     mtn01: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_mountain01_mid.png',
     mtn02: 'Assets/Sprites/Scene1_BoneRuins/Parallax/lv1_mountain02_mid.png',
@@ -116,14 +232,90 @@ const assets = {
     s2_ruin_mid_01: 'Assets/scene2/s2_ruin_mid_01.png',
     s2_ruin_mid_02: 'Assets/scene2/s2_ruin_mid_02.png',
     s2_sym_building_01: 'Assets/scene2/s2_sym_building_01.png',
-    run: [1,2,3,4,5,6].map(i => `Assets/Sprites/Player/juese_paob_0${i}.png`),
-    idle: [1,2,3].map(i => `Assets/Sprites/Player/juese_sanshitu_0${i}.png`),
-    jump: [1,2,3,4,5,6].map(i => `Assets/Sprites/Player/juese_tiaoyue_0${i}.png`)
+    s2_giant_statue_main_01: 'Assets/scene2/statues/s2_giant_statue_main_01.png',
+    s2_giant_statue_side_01: 'Assets/scene2/statues/s2_giant_statue_side_01.png',
+    s1_sky_bird_sheet: 'Assets/animations/scene1/s1_sky_bird_sheet_4x4.png',
+    giant_statue: 'Assets/scene2/giant_statue.png',
+    guide_hand_l1_stairs_up: 'Assets/Sprites/Guides/Hands/guide_hand_l1_stairs_up.png',
+    guide_hand_l2_ramp_45up: 'Assets/Sprites/Guides/Hands/guide_hand_l2_ramp_45up.png',
+    guide_hand_l2_brokenbridge_forward: 'Assets/Sprites/Guides/Hands/guide_hand_l2_brokenbridge_forward.png',
+    guide_hand_l2_float_up: 'Assets/Sprites/Guides/Hands/guide_hand_l2_float_up.png',
+    lv1_transition_blackred_tree_01: 'Assets/Sprites/Scene1_BoneRuins/Foreground/lv1_transition_blackred_tree_01.png',
+    run: [
+        'Assets/Sprites/Player/player_run_001.png',
+        'Assets/Sprites/Player/player_run_002.png',
+        'Assets/Sprites/Player/player_run_003.png',
+        'Assets/Sprites/Player/player_run_004.png'
+    ],
+    idle: [
+        'Assets/Sprites/Player/player_idle_001.png',
+        'Assets/Sprites/Player/player_idle_002.png',
+        'Assets/Sprites/Player/player_idle_003.png',
+        'Assets/Sprites/Player/player_idle_004.png'
+    ],
+    downhill: ['Assets/Sprites/Player/player_downhill.png'],
+    slide: Array.from({ length: 54 }, (_, idx) => `Assets/Sprites/Player/player_slide_${String(idx).padStart(5, '0')}.png`),
+    jump: [
+        'Assets/Sprites/Player/player_jump_001.png',
+        'Assets/Sprites/Player/player_jump_002.png',
+        'Assets/Sprites/Player/player_jump_003.png'
+    ]
 };
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let width, height, groundH, playerH;
+const LOGIC_W = 1184;
+const LOGIC_H = 666;
+const RENDER_SCALE = 3;
+const START_BTN_LOGIC_RECT = { x: 0, y: 0, w: LOGIC_W, h: LOGIC_H };
+const PLAYER_DRAW_SCALE = 1.5;      // 人物素材整体放大1.5倍
+const PLAYER_DRAW_FOOT_OFFSET = 0.0; // 还原默认锚点偏移
+
+function applyStartScreenLayout(displayX, displayY, displayW, displayH) {
+    const bg = document.querySelector('.start-screen-bg');
+    const btn = document.getElementById('start-ui-btn');
+    if (bg) {
+        bg.style.left = `${displayX}px`;
+        bg.style.top = `${displayY}px`;
+        bg.style.width = `${displayW}px`;
+        bg.style.height = `${displayH}px`;
+    }
+    if (btn) {
+        const sx = displayW / LOGIC_W;
+        const sy = displayH / LOGIC_H;
+        const x = displayX + START_BTN_LOGIC_RECT.x * sx;
+        const y = displayY + START_BTN_LOGIC_RECT.y * sy;
+        const w = START_BTN_LOGIC_RECT.w * sx;
+        const h = START_BTN_LOGIC_RECT.h * sy;
+        btn.style.left = `${x}px`;
+        btn.style.top = `${y}px`;
+        btn.style.width = `${w}px`;
+        btn.style.height = `${h}px`;
+    }
+}
+
+function getPlayerDrawScaleByState(state) {
+    // 全动作统一还原为同一尺寸
+    return PLAYER_DRAW_SCALE;
+}
+
+function getPlayerFootOffsetByState(state) {
+    // 全动作统一脚底锚点：人物底边对齐地面顶
+    return 0;
+}
+
+function getPlayerDrawSize(img, state) {
+    const s = getPlayerDrawScaleByState(state);
+    const runHeightStretch = 1.0;
+    const drawH = player.height * s * runHeightStretch;
+    // 全动作统一按源图比例绘制，避免压扁
+    if (img && img.width > 0 && img.height > 0) {
+        const drawW = drawH * (img.width / img.height);
+        return { drawW, drawH };
+    }
+    return { drawW: player.width * s, drawH };
+}
 let windGL = {
     canvas: null,
     gl: null,
@@ -137,6 +329,22 @@ let windVideo = {
     el: null,
     src: '',
     opacity: 0
+};
+let leafFallVideo = {
+    el: null,
+    src: '',
+    opacity: 0,
+    triggered: false,
+    active: false,
+    startedAt: 0,
+    durationMs: 13000,
+    loops: 2,
+    playedLoops: 0
+};
+let b3TreeVideo = {
+    el: null,
+    src: '',
+    active: false
 };
 let skyCurtain = {
     active: false,
@@ -208,6 +416,15 @@ function syncWindVideoRect() {
     windVideo.el.style.height = `${r.height}px`;
 }
 
+function syncLeafFallVideoRect() {
+    if (!leafFallVideo.el) return;
+    const r = canvas.getBoundingClientRect();
+    leafFallVideo.el.style.left = `${r.left}px`;
+    leafFallVideo.el.style.top = `${r.top}px`;
+    leafFallVideo.el.style.width = `${r.width}px`;
+    leafFallVideo.el.style.height = `${r.height}px`;
+}
+
 function destroyWindVideoOverlay() {
     if (!windVideo.el) return;
     try {
@@ -218,6 +435,26 @@ function destroyWindVideoOverlay() {
     if (windVideo.el.parentNode) windVideo.el.parentNode.removeChild(windVideo.el);
     windVideo.el = null;
     windVideo.opacity = 0;
+}
+
+function destroyLeafFallVideoOverlay() {
+    if (!leafFallVideo.el) return;
+    try {
+        leafFallVideo.el.pause();
+        leafFallVideo.el.removeAttribute('src');
+        leafFallVideo.el.load();
+    } catch (e) {}
+    if (leafFallVideo.el.parentNode) leafFallVideo.el.parentNode.removeChild(leafFallVideo.el);
+    leafFallVideo.el = null;
+    leafFallVideo.opacity = 0;
+}
+
+function destroyB3TreeVideoOverlay() {
+    if (!b3TreeVideo.el) return;
+    try {
+        b3TreeVideo.el.pause();
+    } catch (e) {}
+    b3TreeVideo.el = null;
 }
 
 function ensureWindVideoOverlay() {
@@ -234,7 +471,7 @@ function ensureWindVideoOverlay() {
     v.style.pointerEvents = 'none';
     v.style.zIndex = '55';
     v.style.objectFit = 'cover';
-    // 关键：用屏幕混合防止视频黑底压暗主画面
+    // 关键：用屏幕混合防止视频黑底压暗主画
     v.style.mixBlendMode = 'screen';
     v.style.opacity = '0';
     v.style.background = 'transparent';
@@ -244,8 +481,63 @@ function ensureWindVideoOverlay() {
     return true;
 }
 
+function ensureLeafFallVideoOverlay() {
+    if (leafFallVideo.el || !leafFallVideo.src) return !!leafFallVideo.el;
+    const v = document.createElement('video');
+    v.id = 'leaf-fall-video-overlay';
+    v.playsInline = true;
+    v.muted = true;
+    v.loop = false;
+    v.autoplay = false;
+    v.preload = 'auto';
+    v.src = leafFallVideo.src;
+    v.style.position = 'fixed';
+    v.style.pointerEvents = 'none';
+    v.style.zIndex = '54';
+    v.style.objectFit = 'cover';
+    v.style.mixBlendMode = 'screen';
+    v.style.opacity = '0';
+    v.style.background = 'transparent';
+    v.addEventListener('ended', () => {
+        leafFallVideo.playedLoops += 1;
+        if (!leafFallVideo.active || !leafFallVideo.el) return;
+        if (leafFallVideo.playedLoops < leafFallVideo.loops) {
+            leafFallVideo.el.currentTime = 0;
+            const pp = leafFallVideo.el.play();
+            if (pp && typeof pp.catch === 'function') pp.catch(() => {});
+        } else {
+            leafFallVideo.active = false;
+        }
+    });
+    document.body.appendChild(v);
+    leafFallVideo.el = v;
+    syncLeafFallVideoRect();
+    return true;
+}
+
+function ensureB3TreeVideoOverlay() {
+    if (b3TreeVideo.el || !b3TreeVideo.src) return !!b3TreeVideo.el;
+    const v = document.createElement('video');
+    v.playsInline = true;
+    v.muted = true;
+    v.loop = true;
+    v.autoplay = false;
+    v.preload = 'auto';
+    v.src = b3TreeVideo.src;
+    b3TreeVideo.el = v;
+    return true;
+}
+
 function setWindVideoSource(src) {
     windVideo.src = src || '';
+}
+
+function setLeafFallVideoSource(src) {
+    leafFallVideo.src = src || '';
+}
+
+function setB3TreeVideoSource(src) {
+    b3TreeVideo.src = src || '';
 }
 
 function destroyWindOverlay() {
@@ -319,10 +611,10 @@ float hash21(vec2 p){
 void main() {
     vec2 uv = gl_FragCoord.xy / u_resolution.xy;
     
-    // 垂直范围：大风云雾约占屏幕高度 80%（中心带满强度，上下约各 10% 渐隐）
+    // 垂直范围：大风云雾约占屏幕高�?80%（中心带满强度，上下约各 10% 渐隐
     float vHeightMask = 1.0 - smoothstep(0.40, 0.48, abs(uv.y - 0.5));
     
-    // 1. 矫正屏幕比例，防止噪声在宽屏下被横向拉伸成条纹
+    // 1. 矫正屏幕比例，防止噪声在宽屏下被横向拉伸成条
     vec2 aspectUv = vec2(uv.x * (u_resolution.x / u_resolution.y), uv.y);
     
     float w = clamp(u_intensity / 100.0, 0.0, 1.0);
@@ -337,14 +629,14 @@ void main() {
     warp.x = snoise(aspectUv * 1.85 + vec2(speed * 0.45, cam.y));
     warp.y = snoise(aspectUv * 1.85 + vec2(cam.y, speed * 0.38));
 
-    // 3. 主云团 + 低频雾层，柔化边缘、偏云雾感而非实体烟块
+    // 3. 主云�?+ 低频雾层，柔化边缘、偏云雾感而非实体烟块
     float n = snoise(aspectUv * 1.05 + warp * 0.55 + vec2(speed, cam.y));
     n = n * 0.5 + 0.5;
     float mist = snoise(aspectUv * 0.62 + vec2(speed * 0.22, -speed * 0.12 + cam.y * 0.35));
     mist = mist * 0.5 + 0.5;
     float nSoft = mix(n, n * 0.48 + mist * 0.52, 0.52);
 
-    // 4. 遮罩：更宽的 smoothstep，浓度略柔
+    // 4. 遮罩：更宽的 smoothstep，浓度略
     float threshold = 1.0 - (w * 1.12);
     float mask = smoothstep(threshold - 0.14, threshold + 0.38, nSoft);
 
@@ -353,7 +645,7 @@ void main() {
     vec3 colorLight = vec3(0.58, 0.36, 0.44);
     vec3 inkCol = mix(colorDark, colorLight, pow(nSoft, 0.82));
 
-    // 碎石粒子（受风推挤的亮暗斑点/短线）
+    // 碎石粒子（受风推挤的亮暗斑点/短线
     float debris = 0.0;
     for (int i = 0; i < 18; i++) {
         float fi = float(i);
@@ -370,7 +662,7 @@ void main() {
     debris = clamp(debris, 0.0, 1.0);
     debris *= vHeightMask;
 
-    // 7. 最终 Alpha：云雾主体略透明，与 vHeightMask 相乘
+    // 7. 最�?Alpha：云雾主体略透明，与 vHeightMask 相乘
     float alpha = clamp(mask * 0.78 + debris * (0.14 + 0.52 * w), 0.0, 1.0);
     alpha *= vHeightMask;
     alpha *= u_alpha;
@@ -427,13 +719,15 @@ function renderWindOverlay() {
 }
 
 function updateWindOverlayLifecycle() {
-    // 已改为视频转场方案：停用原代码的大风 WebGL 叠加层
+    // 已改为视频转场方案：停用原代码的大风 WebGL 叠加
     if (windGL.gl) destroyWindOverlay();
     return;
 }
 
 // 默认风视频路径（你可替换为自己的素材路径）
 setWindVideoSource('./assets/wind-transition.mp4');
+setLeafFallVideoSource('./Assets/Videos/lv1_b3_leaf_fall_transition_01.mp4');
+setB3TreeVideoSource('./Assets/Videos/lv1_b3_giant_tree_01.webm');
 
 const terrainParams = {
     bX2: 4000, b2ImageX: 3200, peakOffset2: 2200, peakRadius2: 120, h2Ratio: 0.55, climbAngle2: 40,
@@ -455,20 +749,66 @@ let player = {
     capeChain: []
 };
 
-// --- 系统状态 ---
-let specialOrb = { x: 6200, y: 0, triggered: false, alpha: 1, finalized: false };
-let specialOrb2 = { x: 0, y: 0, triggered: false, alpha: 1, finalized: false };
+// --- 系统状�?---
+let specialOrb = { x: 6200, y: 0, triggered: false, alpha: 1, finalized: false, ringBurstAt: 0 };
+let specialOrb2 = { x: 0, y: 0, triggered: false, alpha: 1, finalized: false, ringBurstAt: 0 };
 let debrisOrb = { x: 0, y: 0, triggered: false, finalized: false, pulse: 0 };
 let platformTopOrb = { x: 0, y: 0, triggered: false, finalized: false, pulse: 0 };
+let bridgeLoreEvent = {
+    triggered: false,
+    active: false,
+    pulse: 0,
+    x: 0,
+    y: 0,
+    phase: 'idle',
+    revealLine: 0,
+    revealChar: 0,
+    revealTick: 0,
+    holdFrames: 0,
+    lockCamX: 0,
+    lockCamY: 0,
+    lockZoom: 1,
+    lines: [
+        '连接现实与虚妄的桥梁早已断裂。',
+        '我踩着你破碎的意志，在重力的深渊上逆风而行。',
+        '哪怕粉身碎骨，你也要将最危险的秘密封死在梦境深处吗？',
+        '别怕，事务所的委托，我一定会完成。'
+    ]
+};
+let endingLoreEvent = {
+    triggered: false,
+    active: false,
+    pulse: 0,
+    x: 0,
+    y: 0,
+    phase: 'idle',
+    revealLine: 0,
+    revealChar: 0,
+    revealTick: 0,
+    whiteFade: 0,
+    lockCamX: 0,
+    lockCamY: 0,
+    lockZoom: 1,
+    lines: [
+        '终于找到你了，沉睡在街机里的无名英雄。',
+        '你用石化的身躯挡住了时代的崩塌，却让自己成了人们口中恐惧的“怪谈”。',
+        '四散的微光已经集结，',
+        '醒来吧，或者...在光芒中安息。'
+    ]
+};
 let ringParticles = [];
 let expansionRings = []; 
 let holyRings = [];
 let rampTopShadowParticles = [];
 let poemData = { alpha: 0, show: false, state: 'idle', lines: [], timer: 0, isFirst: true };
-let giantBird = { x: 0, y: 0, active: false, alpha: 0, flap: 0 }; 
+let giantBird = {
+    x: 0, y: 0, active: false, alpha: 0, flap: 0,
+    frameTimer: 0, frame: 0,
+    sheetCols: 4, sheetRows: 4, frameCount: 16, fps: 12
+}; 
 let ambientStorm = []; 
 let stones = []; 
-let weapons = []; // ✨ 剑和戟
+let weapons = []; // 剑和戟
 let vegetation = [];
 let romanColumns = []; 
 let skyStairs = []; 
@@ -482,6 +822,14 @@ let watercolorBlobs = [];
 let mountainTreesFar = [];
 let mountainTreesNear = [];
 let floatingShards = [];
+let b3LeafBlows = [];
+let b3LeafNextSpawnAt = 0;
+let caveRiseParticles = [];
+let caveRiseNextSpawnAt = 0;
+let scene1FgDust = [];
+let scene1FgDustNextSpawnAt = 0;
+const DISABLE_SCENE1_TREE_LEAF_PARTICLES = true;
+const CAVE_RISE_PARTICLE_MAX = 90;
 let rubbleDragonbonesMid = [];
 let farRectTriPeaks = [];
 let scene2ColumnsDeck = [];
@@ -490,8 +838,30 @@ let scene2PlatformDecorSpawned = false;
 let brokenBridgePlatforms = [];
 let zFloatingPlatforms = [];
 let zOrganicTrees = [];
+let giantStatueEvent = {
+    active: false,
+    activated: false,
+    completed: false,
+    shownAt: 0,
+    anchorX: 0,
+    anchorY: 0,
+    anchorPulse: 0,
+    statueX: 0,
+    statueTopY: 0,
+    statueW: 0,
+    statueH: 0,
+    sword: null,
+    steps: [],
+    pathPoints: [],
+    pathLit: [],
+    transforming: false,
+    finalJumpStarted: false,
+    landedOnGround: false,
+    activateStartAt: 0
+};
 let lateStageCheckpoint = { x: 0, y: 0, valid: false };
 const SCENE2_RAMP_START_X = 32500;
+const ENABLE_GIANT_STATUE = true; // 开启终点“星尘路径”事件逻辑
 const SCENE2_RAMP_RUN_MS = 10000;
 const SCENE2_CLIFF_START_X = 40000;
 const SCENE2_CLIFF_END_X = 40800;
@@ -512,15 +882,17 @@ const SCENE2_SHARDS_REVEAL_MIN_MS = 900;
 const SCENE2_SHARDS_REVEAL_MAX_MS = 1800;
 const WIND_VIDEO_TOTAL_MS = 12000; // 大风视频阶段总时长
 const WIND_VIDEO_LOOPS = 2; // 大风视频播放遍数
-const SCENE2_RAMP_SLOPE = 1.0; // X前进1，Y上升1，45度
+const SCENE2_RAMP_SLOPE = 1.0; // X前进1，Y上升1
 const SCENE2_RAMP_CAMERA_ANCHOR = 0.78; // 斜坡段人物保持在屏幕约4/5处（坡面约1/4稍多）
 const SCENE2_RAMP_DRAW_EXTEND = 12; // 顶部平地向右延伸倍数，避免露背景
 const SCENE2_PLATFORM_REVEAL_MS = 1700; // 平台出现的缓动时长，避免突然弹出
 const SCENE2_RAMP_TOOTH_RUN = 14; // 锯齿每级台阶宽度
 const SCENE2_RAMP_TOOTH_RISE = SCENE2_RAMP_TOOTH_RUN * SCENE2_RAMP_SLOPE; // 与坡度一致
-const SCENE2_RAMP_FOOT_EDGE_OFFSET = 3; // 让人物脚底更贴边缘上方
+const SCENE2_RAMP_FOOT_EDGE_OFFSET = 3; // 让人物脚底更贴边缘上缘
 const SCENE2_SKY_COLUMN_X = 33580;
 const SCENE2_SKY_COLUMN_HEIGHT_RATIO = 5.0;
+const SCENE1_CAVE_X = 24000;
+const SCENE1_CAVE_BEAM_END_X = 27040;
 let scene2Ramp = {
     started: false,
     startAt: 0,
@@ -538,7 +910,7 @@ let scene2Ramp = {
 function scene2RampEdgeY(worldX) {
     const baseGround = height - groundH;
     const climbDx = Math.max(0, worldX - SCENE2_RAMP_START_X);
-    // 物理高度保持连续斜率：贴着锯齿边缘走，但不产生踩台阶抖动
+    // 物理高度保持连续斜率：贴着锯齿边缘走，但不产生踩台阶抖
     return baseGround - (climbDx * SCENE2_RAMP_SLOPE) - SCENE2_RAMP_FOOT_EDGE_OFFSET;
 }
 
@@ -618,9 +990,9 @@ function ensureZFloatingPlatforms() {
     const count = Math.ceil(totalRise / riseStep) + Math.ceil(height * 0.14 / riseStep);
     const baseX = SCENE2_Z_FLOAT_START_X + 40;
 
-    // 入场保底平台：确保 49500 附近可以直接起跳衔接到悬浮路线
-    const firstFloatX = SCENE2_BROKEN_PLATFORM_END_X + 22;
-    const firstFloatY = deckY - 132;
+    // 入场首个平台：整体右移到 50000 之后，避免在 50000 前出现悬浮地
+    const firstFloatX = SCENE2_BROKEN_PLATFORM_END_X + 190;
+    const firstFloatY = deckY - 98;
     zFloatingPlatforms.push({
         x: firstFloatX,
         y: firstFloatY,
@@ -644,7 +1016,7 @@ function ensureZFloatingPlatforms() {
         ],
         t: 0
     });
-    // 引导链：前几跳刻意做得可达，避免 50000 后第一段断档
+    // 引导链：前几跳刻意做得可达，避免 50000 后第一段断
     const guidePlatforms = [
         { x: firstFloatX + 170, y: firstFloatY - 88, w: 240, h: 108 },
         { x: firstFloatX + 340, y: firstFloatY - 196, w: 228, h: 106 },
@@ -752,14 +1124,401 @@ function getZFloatingEntryCheckpoint() {
     return { x: SCENE2_BROKEN_PLATFORM_END_X + 22, y: gy - 132 - player.height };
 }
 
-function getZFloatingPlatformY(worldX) {
-    for (let i = 0; i < zFloatingPlatforms.length; i++) {
+function getZFloatingFinalPlatform() {
+    if (!zFloatingPlatforms.length) return null;
+    let finalP = zFloatingPlatforms[0];
+    for (let i = 1; i < zFloatingPlatforms.length; i++) {
         const p = zFloatingPlatforms[i];
-        if (worldX >= p.x - p.w * 0.5 && worldX <= p.x + p.w * 0.5) {
-            return p.y;
+        // y 越小越高：选最高平台；同高度时取更靠右
+        if (p.y < finalP.y - 1 || (Math.abs(p.y - finalP.y) < 1 && p.x > finalP.x)) {
+            finalP = p;
         }
     }
+    return finalP;
+}
+
+function getEndpointTwinStatueLayout() {
+    const baseY = height - groundH;
+    const finalP = getZFloatingFinalPlatform();
+    const floatTopY = finalP ? finalP.y : (baseY - height * 0.68);
+    // 逻辑顶略高于最终悬浮台面，配合加高 h，表现比平台「更高一截
+    const topAboveFloat = Math.max(56, height * 0.072);
+    const statue1TopY = floatTopY - topAboveFloat;
+    const statue1 = {
+        // 雕像1（主雕像
+        x: SCENE2_BROKEN_PLATFORM_END_X + 5950,
+        h: Math.max(height * 1.42, baseY - statue1TopY)
+    };
+    statue1.yTop = statue1TopY;
+    // 参考图：第二点在剑柄顶部，第三点在头盔顶部
+    statue1.swordTip = { x: statue1.x - statue1.h * 0.19, y: statue1.yTop + statue1.h * 0.14 };
+    statue1.headTop = { x: statue1.x + statue1.h * 0.03, y: statue1.yTop - statue1.h * 0.02 };
+    // 小臂平台：贴近前臂红线位置（不额外加�?加厚
+    statue1.forearmPlatform = {
+        x: statue1.swordTip.x + 380,
+        y: statue1.yTop + statue1.h * 0.55 - 860,
+        w: Math.max(180, statue1.h * 0.26),
+        h: Math.max(14, statue1.h * 0.016)
+    };
+    return { baseY, floatTopY, statue1 };
+}
+
+function isSkyPathForbiddenForProps(worldX) {
+    if (!Number.isFinite(worldX)) return false;
+
+    // 悬空平台区域（含少量边距
+    let inFloatZone = false;
+    if (zFloatingPlatforms.length) {
+        let minX = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        for (let i = 0; i < zFloatingPlatforms.length; i++) {
+            const p = zFloatingPlatforms[i];
+            minX = Math.min(minX, p.x - p.w * 0.5);
+            maxX = Math.max(maxX, p.x + p.w * 0.5);
+        }
+        inFloatZone = worldX >= (minX - 140) && worldX <= (maxX + 180);
+    } else {
+        inFloatZone = worldX >= (SCENE2_Z_FLOAT_START_X - 120) && worldX <= (SCENE2_Z_FLOAT_START_X + 1800);
+    }
+
+    // 星尘路径区域（按路径线段带宽判定
+    let inStardustZone = false;
+    const pts = giantStatueEvent.pathPoints;
+    if (pts && pts.length > 1) {
+        for (let i = 0; i < pts.length - 1; i++) {
+            const a = pts[i];
+            const b = pts[i + 1];
+            const minX = Math.min(a.x, b.x) - 120;
+            const maxX = Math.max(a.x, b.x) + 120;
+            if (worldX >= minX && worldX <= maxX) {
+                inStardustZone = true;
+                break;
+            }
+        }
+    }
+
+    // 兜底：事件未激活时也屏蔽终点星尘走廊的植被/小花
+    if (!inStardustZone) {
+        const layout = getEndpointTwinStatueLayout();
+        const fallbackMinX = SCENE2_Z_FLOAT_START_X - 160;
+        const fallbackMaxX = Math.max(
+            SCENE2_Z_FLOAT_START_X + 2600,
+            layout.statue1.x + layout.statue1.h * 0.9
+        );
+        inStardustZone = worldX >= fallbackMinX && worldX <= fallbackMaxX;
+    }
+
+    return inFloatZone || inStardustZone;
+}
+
+function getGiantSwordY(worldX) {
+    if (!giantStatueEvent.active || giantStatueEvent.completed || !giantStatueEvent.sword) return null;
+    if (giantStatueEvent.finalJumpStarted) return null;
+    const s = giantStatueEvent.sword;
+    const minX = Math.min(s.x1, s.x2) - s.pad;
+    const maxX = Math.max(s.x1, s.x2) + s.pad;
+    if (worldX < minX || worldX > maxX) return null;
+    const dx = s.x2 - s.x1;
+    if (Math.abs(dx) < 1e-6) return null;
+    const t = (worldX - s.x1) / dx;
+    if (t < 0 || t > 1) return null;
+    const edgeY = s.y1 + (s.y2 - s.y1) * t;
+    return edgeY;
+}
+
+function getGiantStatueContourY(worldX) {
+    if (!giantStatueEvent.active || giantStatueEvent.completed || !giantStatueEvent.contour) return null;
+    const c = giantStatueEvent.contour;
+    const minX = Math.min(c.x1, c.x2) - c.pad;
+    const maxX = Math.max(c.x1, c.x2) + c.pad;
+    if (worldX < minX || worldX > maxX) return null;
+    const dx = c.x2 - c.x1;
+    if (Math.abs(dx) < 1e-6) return null;
+    const t = (worldX - c.x1) / dx;
+    if (t < 0 || t > 1) return null;
+    return c.y1 + (c.y2 - c.y1) * t;
+}
+
+function getStardustRoadY(worldX) {
+    if (!giantStatueEvent.active || giantStatueEvent.completed) return null;
+    // 行走阶段 finalJumpStarted 后可能已 cleared activated（落地停粒子），仍需沿路径碰
+    if (!giantStatueEvent.activated && !giantStatueEvent.finalJumpStarted) return null;
+    const pts = giantStatueEvent.pathPoints;
+    const lit = giantStatueEvent.pathLit;
+    if (!pts || pts.length < 2) return null;
+    const requireLit = !giantStatueEvent.finalJumpStarted;
+    let bestY = null;
+    let bestSeg = -1;
+    const xPad = giantStatueEvent.finalJumpStarted ? 48 : 28;
+    for (let i = 0; i < pts.length - 1; i++) {
+        if (requireLit && (!lit[i] || !lit[i + 1])) continue;
+        const a = pts[i];
+        const b = pts[i + 1];
+        const minX = Math.min(a.x, b.x) - xPad;
+        const maxX = Math.max(a.x, b.x) + xPad;
+        if (worldX < minX || worldX > maxX) continue;
+        const dx = b.x - a.x;
+        if (Math.abs(dx) < 1e-6) {
+            const y = Math.min(a.y, b.y);
+            if (i > bestSeg) {
+                bestSeg = i;
+                bestY = y;
+            } else if (i === bestSeg && (bestY == null || y < bestY)) {
+                bestY = y;
+            }
+            continue;
+        }
+        const t = (worldX - a.x) / dx;
+        if (t < 0 || t > 1) continue;
+        const y = a.y + (b.y - a.y) * t;
+        // Z 路径�?X 重叠时，优先更靠后的段，确保能从 B 转入 C 斜线继续前进
+        if (i > bestSeg) {
+            bestSeg = i;
+            bestY = y;
+        } else if (i === bestSeg && (bestY == null || y < bestY)) {
+            bestY = y;
+        }
+    }
+    return bestY;
+}
+
+/** 终点引导期间：沿已点亮路�?+ 下一段折线提供连续落脚面，避�?Z 区判空下�?*/
+function getGiantStatueGuideFloorY(worldX) {
+    if (!giantStatueEvent.active || giantStatueEvent.finalJumpStarted || !giantStatueEvent.activated) return null;
+    const pts = giantStatueEvent.pathPoints;
+    const lit = giantStatueEvent.pathLit || [];
+    if (!pts || pts.length < 2) return null;
+    let maxLit = -1;
+    for (let i = 0; i < lit.length; i++) if (lit[i]) maxLit = i;
+    const lastSegI = pts.length - 2;
+    const xPad = 48;
+    let bestY = null;
+    let bestSeg = -1;
+    for (let i = 0; i <= lastSegI; i++) {
+        const segBothLit = lit[i] && lit[i + 1];
+        // 最前已亮点之后的一段（可能末点尚未亮）：保�?3 段折线都能接到脚
+        const lookaheadSeg = maxLit >= 0 && i === maxLit && i < pts.length - 1;
+        if (!segBothLit && !lookaheadSeg) continue;
+        const a = pts[i];
+        const b = pts[i + 1];
+        const minX = Math.min(a.x, b.x) - xPad;
+        const maxX = Math.max(a.x, b.x) + xPad;
+        if (worldX < minX || worldX > maxX) continue;
+        const dx = b.x - a.x;
+        if (Math.abs(dx) < 1e-6) {
+            const y = Math.min(a.y, b.y);
+            if (i > bestSeg) {
+                bestSeg = i;
+                bestY = y;
+            } else if (i === bestSeg && (bestY == null || y < bestY)) {
+                bestY = y;
+            }
+            continue;
+        }
+        const t = (worldX - a.x) / dx;
+        const u = Math.max(0, Math.min(1, t));
+        const y = a.y + (b.y - a.y) * u;
+        if (i > bestSeg) {
+            bestSeg = i;
+            bestY = y;
+        } else if (i === bestSeg && (bestY == null || y < bestY)) {
+            bestY = y;
+        }
+    }
+    return bestY;
+}
+
+function getGiantStatueStepY(worldX) {
     return null;
+}
+
+function updateGiantStatueEvent() {
+    if (!ENABLE_GIANT_STATUE) return;
+    if (giantStatueEvent.active || !zFloatingPlatforms.length) return;
+    const lastP = getZFloatingFinalPlatform();
+    if (!lastP) return;
+    const footY = player.y + player.height;
+    const nearLast = Math.abs(player.x - lastP.x) < Math.max(92, lastP.w * 0.72) &&
+        Math.abs(footY - lastP.y) < 42;
+    if (!nearLast) return;
+
+    const layout = getEndpointTwinStatueLayout();
+    const groundBaseline = layout.baseY;
+    const statue1 = layout.statue1;
+    const floatTopY = layout.floatTopY;
+    giantStatueEvent.active = true;
+    giantStatueEvent.shownAt = performance.now();
+    giantStatueEvent.anchorX = lastP.x;
+    giantStatueEvent.anchorY = lastP.y - 170; // 上移并可通过直接跳跃触碰
+    giantStatueEvent.statueX = statue1.x;
+    giantStatueEvent.statueTopY = Math.min(statue1.yTop, floatTopY);
+    giantStatueEvent.statueW = Math.max(statue1.h * 1.05, width * 0.42);
+    giantStatueEvent.statueH = groundBaseline - giantStatueEvent.statueTopY;
+    // 已取消剑柄斜坡碰撞，行走仅依赖星尘路径三
+    giantStatueEvent.sword = null;
+    giantStatueEvent.contour = {
+        x1: statue1.x, y1: statue1.yTop + statue1.h * 0.55,
+        x2: statue1.x + statue1.h * 0.32, y2: groundBaseline,
+        pad: 32
+    };
+    giantStatueEvent.steps = [];
+    giantStatueEvent.anchorX = lastP.x;
+    giantStatueEvent.anchorY = lastP.y - 170;
+    giantStatueEvent.anchorPulse = 0;
+    giantStatueEvent.activated = false;
+    giantStatueEvent.completed = false;
+    giantStatueEvent.transforming = false;
+    giantStatueEvent.finalJumpStarted = false;
+    giantStatueEvent.landedOnGround = false;
+    giantStatueEvent.activateStartAt = 0;
+
+    // 4 个路径点�? 段折线：终点平台 �?两个三等分点 �?剑尖（无剑柄点）
+    const tipX = statue1.swordTip.x;
+    const tipY = statue1.swordTip.y;
+    const pdx = tipX - lastP.x;
+    const pdy = tipY - lastP.y;
+    giantStatueEvent.pathPoints = [
+        { x: lastP.x,                  y: lastP.y },
+        { x: lastP.x + pdx / 3,        y: lastP.y + pdy / 3 },
+        { x: lastP.x + pdx * 2 / 3,    y: lastP.y + pdy * 2 / 3 },
+        { x: tipX,                     y: tipY }
+    ];
+    giantStatueEvent.pathLit = new Array(giantStatueEvent.pathPoints.length).fill(false);
+}
+
+function activateGiantStardustPath() {
+    if (!giantStatueEvent.active || giantStatueEvent.activated) return;
+    giantStatueEvent.activated = true;
+    giantStatueEvent.transforming = true;
+    giantStatueEvent.activateStartAt = performance.now();
+    audioSys.pointLitCount = 0;
+    player.inputLocked = true;
+    player.vx = 0;
+    player.vy = 0;
+
+    const targetCount = giantStatueEvent.pathPoints.length || 3;
+    for (let i = 0; i < targetCount; i++) {
+        expansionRings.push({
+            x: giantStatueEvent.anchorX,
+            y: giantStatueEvent.anchorY,
+            r: 6 + i * 3,
+            alpha: 0.72 - i * 0.05,
+            dr: 1.4 + i * 0.28
+        });
+    }
+
+    while (player.followingParticles.length < targetCount) {
+        player.followingParticles.push({
+            x: giantStatueEvent.anchorX + (Math.random() - 0.5) * 12,
+            y: giantStatueEvent.anchorY + (Math.random() - 0.5) * 12,
+            seed: Math.random() * Math.PI * 2,
+            trail: []
+        });
+    }
+    if (player.followingParticles.length > targetCount) {
+        player.followingParticles = player.followingParticles.slice(0, targetCount);
+    }
+
+    for (let i = 0; i < player.followingParticles.length; i++) {
+        const p = player.followingParticles[i];
+        p.stardustTarget = Math.min(i, giantStatueEvent.pathPoints.length - 1);
+        p.stardustPinned = false;
+        // 触碰锚点后立即转化，不再保持身后环绕等待
+        p.stardustDelay = 0;
+        p.trail = [];
+    }
+}
+
+function updateGiantStardustPath() {
+    if (!giantStatueEvent.active) return;
+    giantStatueEvent.anchorPulse += 0.04;
+
+    if (!giantStatueEvent.activated) {
+        const dx = player.x + player.width * 0.5 - giantStatueEvent.anchorX;
+        const dy = player.y + player.height * 0.5 - giantStatueEvent.anchorY;
+        if ((dx * dx + dy * dy) < 46 * 46) activateGiantStardustPath();
+        return;
+    }
+
+    const pts = giantStatueEvent.pathPoints;
+    const lit = giantStatueEvent.pathLit;
+    let litCount = 0;
+    player.followingParticles.forEach((p) => {
+        const idx = Math.max(0, Math.min(pts.length - 1, p.stardustTarget || 0));
+        const t = pts[idx];
+        if (!p.stardustPinned) {
+            if ((p.stardustDelay || 0) > 0) {
+                p.stardustDelay -= 1;
+            } else {
+                p.x += (t.x - p.x) * 0.06;
+                p.y += (t.y - p.y) * 0.06;
+            }
+            const ddx = t.x - p.x;
+            const ddy = t.y - p.y;
+            if ((ddx * ddx + ddy * ddy) < 8 * 8) {
+                p.stardustPinned = true;
+                if (!lit[idx]) playStardustLitChime();
+                lit[idx] = true;
+            }
+        } else {
+            p.x = t.x + Math.sin(Date.now() * 0.004 + idx) * 1.4;
+            p.y = t.y + Math.cos(Date.now() * 0.0046 + idx * 0.7) * 1.1;
+            lit[idx] = true;
+        }
+        p.trail.unshift({ x: p.x, y: p.y });
+        if (p.trail.length > 12) p.trail.pop();
+    });
+
+    for (let i = 0; i < lit.length; i++) if (lit[i]) litCount++;
+    if (litCount >= pts.length) {
+        giantStatueEvent.transforming = false;
+        if (!giantStatueEvent.finalJumpStarted) {
+            giantStatueEvent.finalJumpStarted = true;
+            player.inputLocked = false;
+        }
+    }
+
+    const atGround = (player.y + player.height) >= (height - groundH - 2);
+    if (giantStatueEvent.finalJumpStarted && atGround) {
+        giantStatueEvent.landedOnGround = true;
+        giantStatueEvent.activated = false;
+    }
+
+    // 收尾条件：脚底回到地面，且玩�?X 超过最后一个路径点
+    if (!giantStatueEvent.completed && pts.length > 0) {
+        const lastPt = pts[pts.length - 1];
+        const footY = player.y + player.height;
+        if (footY >= (height - groundH - 2) && player.x > lastPt.x) {
+            giantStatueEvent.completed = true;
+            giantStatueEvent.active = false;
+            giantStatueEvent.transforming = false;
+            giantStatueEvent.finalJumpStarted = false;
+            player.inputLocked = false;
+        }
+    }
+
+    if (giantStatueEvent.landedOnGround) {
+        player.followingParticles.forEach((p) => {
+            p.stardustPinned = false;
+            p.stardustTarget = 0;
+            p.stardustDelay = 0;
+            p.trail = [];
+        });
+        // 只在落地当帧做一次解锁，避免每帧重置导致不再跟随
+        giantStatueEvent.landedOnGround = false;
+    }
+}
+
+function getZFloatingPlatformY(worldX, belowBodyY) {
+    // 返回最高（最�?y）且在玩家身体顶部以下的平台，避免数组首个低平台遮蔽高处平台
+    let bestY = null;
+    for (let i = 0; i < zFloatingPlatforms.length; i++) {
+        const p = zFloatingPlatforms[i];
+        if (worldX < p.x - p.w * 0.5 || worldX > p.x + p.w * 0.5) continue;
+        if (belowBodyY != null && p.y < belowBodyY) continue;
+        if (bestY === null || p.y < bestY) bestY = p.y;
+    }
+    return bestY;
 }
 
 function updateZOrganicTrees() {
@@ -788,7 +1547,7 @@ function ensureScene2PlatformDecor() {
 
     const isFarFromExisting = (arr, x, gap) => arr.every(it => Math.abs(it.x - x) >= gap);
 
-    // 罗马柱：平台更密、桥面更疏，排除地面区（x 明确限定）
+    // 罗马柱：平台更密、桥面更疏，排除地面区（x 明确限定
     for (let i = 0; i < 5; i++) {
         const x = platformStart + Math.random() * Math.max(40, platformEnd - platformStart);
         if (!isFarFromExisting(scene2ColumnsDeck, x, 210)) continue;
@@ -800,7 +1559,7 @@ function ensureScene2PlatformDecor() {
         scene2ColumnsDeck.push({ x, imgKey: colKeys[(i + 1) % colKeys.length], scale: 0.68 + Math.random() * 0.18 });
     }
 
-    // 中景废墟：仅平台中景层，不压前景；并避让罗马柱
+    // 中景废墟：仅平台中景层，不压前景；并避让罗马
     for (let i = 0; i < 6; i++) {
         const x = platformStart + Math.random() * Math.max(40, platformEnd - platformStart);
         if (!isFarFromExisting(scene2ColumnsDeck, x, 220)) continue;
@@ -858,7 +1617,84 @@ function updateAmbientWindBurst(now) {
         destroyWindVideoOverlay();
     }
 }
-/** 第二关视觉强度：仅 0 或 1（由虚空落地瞬间切满，不再做爆炸渐变） */
+
+function updateLeafFallVideoEvent(now) {
+    if (transition.scene2Blend >= 0.01) {
+        if (leafFallVideo.active) {
+            leafFallVideo.active = false;
+            destroyLeafFallVideoOverlay();
+        }
+        return;
+    }
+
+    const tree02X = terrainParams.bX3 + terrainParams.w3 * 0.42;
+    const triggerX = tree02X - 1700;
+    if (!leafFallVideo.triggered && player.x >= triggerX) {
+        leafFallVideo.triggered = true;
+        leafFallVideo.active = true;
+        leafFallVideo.startedAt = now;
+        leafFallVideo.opacity = 0;
+        leafFallVideo.playedLoops = 0;
+        if (ensureLeafFallVideoOverlay() && leafFallVideo.el) {
+            leafFallVideo.el.currentTime = 0;
+            leafFallVideo.el.loop = false;
+            leafFallVideo.el.playbackRate = 1;
+            if (leafFallVideo.el.readyState >= 1 && Number.isFinite(leafFallVideo.el.duration) && leafFallVideo.el.duration > 0.01) {
+                leafFallVideo.durationMs = leafFallVideo.el.duration * leafFallVideo.loops * 1000;
+            } else {
+                leafFallVideo.el.addEventListener('loadedmetadata', () => {
+                    if (!leafFallVideo.el) return;
+                    if (Number.isFinite(leafFallVideo.el.duration) && leafFallVideo.el.duration > 0.01) {
+                        leafFallVideo.durationMs = leafFallVideo.el.duration * leafFallVideo.loops * 1000;
+                    }
+                }, { once: true });
+            }
+            const pp = leafFallVideo.el.play();
+            if (pp && typeof pp.catch === 'function') pp.catch(() => {});
+        }
+    }
+
+    if (!leafFallVideo.active || !leafFallVideo.el) return;
+    const dt = now - leafFallVideo.startedAt;
+    const p = Math.max(0, Math.min(1, dt / Math.max(1, leafFallVideo.durationMs)));
+    const fadeIn = Math.max(0, Math.min(1, p / 0.2));
+    const fadeOut = Math.max(0, Math.min(1, (1 - p) / 0.22));
+    const targetAlpha = 0.42 * Math.min(fadeIn, fadeOut);
+    leafFallVideo.opacity += (targetAlpha - leafFallVideo.opacity) * 0.18;
+    leafFallVideo.el.style.opacity = `${Math.max(0, Math.min(0.5, leafFallVideo.opacity))}`;
+
+    if (p >= 1) {
+        leafFallVideo.active = false;
+        destroyLeafFallVideoOverlay();
+    }
+}
+
+function updateB3TreeVideoEvent() {
+    if (transition.scene2Blend >= 0.01) {
+        b3TreeVideo.active = false;
+        if (b3TreeVideo.el) {
+            try { b3TreeVideo.el.pause(); } catch (e) {}
+        }
+        return;
+    }
+    const tree02X = terrainParams.bX3 + terrainParams.w3 * 0.42;
+    const inB3TreeZone = player.x >= (tree02X - 1850) && player.x <= (tree02X + 850);
+    if (!inB3TreeZone) {
+        b3TreeVideo.active = false;
+        if (b3TreeVideo.el) {
+            try { b3TreeVideo.el.pause(); } catch (e) {}
+        }
+        return;
+    }
+    b3TreeVideo.active = true;
+    if (ensureB3TreeVideoOverlay() && b3TreeVideo.el) {
+        if (b3TreeVideo.el.paused) {
+            const pp = b3TreeVideo.el.play();
+            if (pp && typeof pp.catch === 'function') pp.catch(() => {});
+        }
+    }
+}
+/** 第二关视觉强度：�?0 �?1（由虚空落地瞬间切满，不再做爆炸渐变�?*/
 let transition = { scene2Blend: 0, shake: 0 };
 let windTransition = {
     phase: 'idle', // idle -> approach -> hold -> video -> done
@@ -884,7 +1720,7 @@ const VOID_FALL_POSE_DELAY_MS = 720;
 const VOID_EYE_MS = 8000;
 const VOID_EYE_FOLLOW_DIST = 200;
 const VOID_EYE_CLOSE_MS = 1600;
-/** 虚空下落子状态：freeFall -> hardLanding -> recoverStand -> 结束转 eyeFollow */
+/** 虚空下落子状态：freeFall -> hardLanding -> recoverStand -> 结束�?eyeFollow */
 let voidFall = {
     phase: 'idle',
     fallState: 'idle',
@@ -903,13 +1739,17 @@ let voidFall = {
     recoverAt: 0
 };
 
-/** 虚空全屏竖线流星（屏幕坐标，多层速度） */
+/** 虚空全屏竖线流星（屏幕坐标，多层速度�?*/
 let voidLineMeteors = { list: [] };
 
-/** 落地事件：灰尘 + 屏幕震动。扩展：landingFx.onLandCallbacks.push((ev) => { ev.x, ev.y脚底世界坐标 }) */
+/** 落地事件：灰�?+ 屏幕震动。扩展：landingFx.onLandCallbacks.push((ev) => { ev.x, ev.y脚底世界坐标 }) */
 let landingFx = {
     dust: [],
     onLandCallbacks: []
+};
+let downhillDustFx = {
+    particles: [],
+    nextSpawnAt: 0
 };
 
 const VOID_TERM_VELOCITY = 9.2;
@@ -934,17 +1774,25 @@ const gravity = 0.7;
 const friction = 0.85;
 let gameState = 'MENU';
 let camera = { x: 0, y: 0, zoom: 1, targetZoom: 1, targetY: 0, shakeLand: 0 };
-const images = { run: [], idle: [], jump: [] };
+const images = { run: [], idle: [], slide: [], jump: [] };
 let loadedCount = 0;
 
 function isImageReady(img) { return img && img.complete && img.naturalWidth !== 0; }
 
 function loadImages() {
-    ['bg', 'bg1', 'vista', 'hand', 'building02', 'building03', 'building04', 'ruinsDebris', 'mtn01', 'mtn02', 's2_column_01', 's2_column_02', 's2_column_03', 's2_ruin_mid_01', 's2_ruin_mid_02', 's2_sym_building_01'].forEach(key => {
-        images[key] = new Image(); images[key].src = assets[key];
-        images[key].onload = () => loadedCount++;
+    ['bg', 'bg1', 'vista', 'hand', 'building02', 'building03', 'building04', 'b3GiantTree01', 'b3GiantTree02', 'b3FgOccluder01', 'lv1_cave_bg_01', 'lv1_cave_fg_01', 'lv1_cave_beam_left_01', 'ui_start_screen_01', 'ui_start_button_01_idle', 'ui_start_button_01_hover', 'ui_start_button_01_pressed', 'clouds_far', 'ruinsDebris', 'mtn01', 'mtn02', 's2_column_01', 's2_column_02', 's2_column_03', 's2_ruin_mid_01', 's2_ruin_mid_02', 's2_sym_building_01', 's2_giant_statue_main_01', 's2_giant_statue_side_01', 's1_sky_bird_sheet', 'giant_statue', 'guide_hand_l1_stairs_up', 'guide_hand_l2_ramp_45up', 'guide_hand_l2_brokenbridge_forward', 'guide_hand_l2_float_up', 'lv1_transition_blackred_tree_01'].forEach(key => {
+        const img = new Image();
+        const url = assets[key];
+        img.onload = () => loadedCount++;
+        img.onerror = () => {
+            if (img.dataset.fallback === '1' || !url.startsWith('./')) return;
+            img.dataset.fallback = '1';
+            img.src = url.slice(2);
+        };
+        img.src = url;
+        images[key] = img;
     });
-    ['run', 'idle', 'jump'].forEach(key => {
+    ['run', 'idle', 'slide', 'jump'].forEach(key => {
         assets[key].forEach((src, idx) => {
             const img = new Image(); img.src = src; 
             img.onload = () => loadedCount++;
@@ -968,41 +1816,147 @@ function getTerrain4Points() {
     return { start: b4.bX4, peak: b4.bX4 + dxL, end: b4.bX4 + dxL + dxR, h: b4.h4 };
 }
 
+function sanitizeCameraState() {
+    // 防止异常数值导致画布白屏/卡顿
+    if (!Number.isFinite(camera.x)) camera.x = player.x - width * 0.5;
+    if (!Number.isFinite(camera.y)) camera.y = 0;
+    if (!Number.isFinite(camera.targetY)) camera.targetY = camera.y;
+    if (!Number.isFinite(camera.zoom)) camera.zoom = 1;
+    if (!Number.isFinite(camera.targetZoom)) camera.targetZoom = camera.zoom;
+
+    camera.zoom = Math.max(0.25, Math.min(1.35, camera.zoom));
+    camera.targetZoom = Math.max(0.25, Math.min(1.35, camera.targetZoom));
+    camera.x = Math.max(-width * 2, Math.min(200000, camera.x));
+    camera.y = Math.max(-height * 20, Math.min(height * 20, camera.y));
+    camera.targetY = Math.max(-height * 20, Math.min(height * 20, camera.targetY));
+}
+
+// 第一关“障碍手”轮廓碰撞：按手部上沿分段近似，避免顶部悬空
+function getHandObstacleY(worldX) {
+    const handX = 1500;
+    const handH = height * 0.45;
+    const img = images.hand;
+    const handW = (isImageReady(img) && img.height > 0) ? (handH * (img.width / img.height)) : 600;
+    const handTopY = height - groundH - handH + 10;
+    if (worldX < handX || worldX > handX + handW) return null;
+
+    const t = (worldX - handX) / Math.max(1, handW);
+    // t: 0(�? -> 1(�?，yNorm: 相对手图高度
+    const profile = [
+        { t: 0.00, yNorm: 0.82 },
+        { t: 0.08, yNorm: 0.70 },
+        { t: 0.18, yNorm: 0.56 },
+        { t: 0.30, yNorm: 0.45 },
+        { t: 0.42, yNorm: 0.37 }, // 顶部主平
+        { t: 0.54, yNorm: 0.35 }, // 顶部延展，减少“顶点掉进图层
+        { t: 0.66, yNorm: 0.40 },
+        { t: 0.78, yNorm: 0.53 },
+        { t: 0.90, yNorm: 0.68 },
+        { t: 1.00, yNorm: 0.82 }
+    ];
+    for (let i = 0; i < profile.length - 1; i++) {
+        const a = profile[i];
+        const b = profile[i + 1];
+        if (t < a.t || t > b.t) continue;
+        const u = (t - a.t) / Math.max(1e-6, (b.t - a.t));
+        const yNorm = a.yNorm + (b.yNorm - a.yNorm) * u;
+        return handTopY + yNorm * handH;
+    }
+    return handTopY + profile[profile.length - 1].yNorm * handH;
+}
+
 function getGroundHeight(worldX, currentY) {
     const baseGround = height - groundH;
-    // 50000 衔接托底：断桥末端到悬浮区起点稳定过渡
+    const roadY = getStardustRoadY(worldX);
+    if (roadY != null) return roadY;
+    const swordY = getGiantSwordY(worldX);
+    if (swordY != null) return swordY;
+    const contourY = getGiantStatueContourY(worldX);
+    if (contourY != null) return contourY;
+    if (giantStatueEvent.active) {
+        const fp = getEndpointTwinStatueLayout().statue1.forearmPlatform;
+        if (worldX >= fp.x - fp.w * 0.5 && worldX <= fp.x + fp.w * 0.5) return fp.y;
+    }
+    const guideFloorY = getGiantStatueGuideFloorY(worldX);
+    if (guideFloorY != null) return guideFloorY;
+    // 终点引导全程安全兜底：只要还没进入最终跳地，就在巨像走廊范围提供可站立面，避免瞬间判空
+    if (giantStatueEvent.active && !giantStatueEvent.finalJumpStarted && giantStatueEvent.pathPoints.length > 1) {
+        const pts = giantStatueEvent.pathPoints;
+        const p0 = pts[0];
+        const xMin = Math.min(...pts.map(p => p.x));
+        const xMax = Math.max(...pts.map(p => p.x));
+        if (worldX >= xMin - 900 && worldX <= xMax + 600) {
+            const zSafe = getZFloatingPlatformY(worldX, currentY);
+            if (zSafe != null) return zSafe;
+            const guideSafe = getGiantStatueGuideFloorY(worldX);
+            if (guideSafe != null) return guideSafe;
+            // 没有可用段时保持在首平台高度，不让角色掉进深渊
+            return p0.y;
+        }
+    }
+    // 终点引导未激活时：仍站在 Z 悬浮上，用平台碰撞；勿对全图强行返回 p0.y
+    if (giantStatueEvent.active && !giantStatueEvent.activated && giantStatueEvent.pathPoints.length > 0) {
+        const zyEarly = getZFloatingPlatformY(worldX, currentY);
+        if (zyEarly != null) return zyEarly;
+        const p0 = giantStatueEvent.pathPoints[0];
+        if (worldX >= p0.x - 420 && worldX <= p0.x + 620) return p0.y;
+    }
+    if (giantStatueEvent.completed && worldX >= SCENE2_Z_FLOAT_START_X - 180) {
+        // 完成巨像终段后，恢复第二关常规地面，避免落地后掉空回退
+        return baseGround;
+    }
+    // 50000 衔接托底：断桥末端到悬浮区起点稳定过渡，优先悬浮平台碰撞
     if (worldX >= 49400 && worldX <= 50200) {
+        const zpY = getZFloatingPlatformY(worldX, currentY);
+        if (zpY != null) return zpY;
         return getScene2ArchBridgeDeckY();
     }
-    // 43000 衔接段仅保留窄托底，避免破坏断桥自然跳跃节奏
-    if (worldX >= 42980 && worldX <= 43020) {
+    // 43000 断桥入口稳定托底：扩大保护带，避免入口单帧判空导致“人物消失”
+    if (worldX >= SCENE2_BROKEN_PLATFORM_START_X - 80 && worldX <= SCENE2_BROKEN_PLATFORM_START_X + 260) {
         return getScene2ArchBridgeDeckY();
     }
-    // 50000 衔接托底：确保起跳过渡区不会判空
-    if (worldX >= 49400 && worldX <= 50100) {
-        return getScene2ArchBridgeDeckY();
-    }
-    // 50000 后启用 Z 字悬浮平台碰撞
+    // 50000 后启�?Z 字悬浮平台碰
     if (worldX >= SCENE2_Z_FLOAT_START_X) {
-        const gy = getZFloatingPlatformY(worldX);
+        // 巨像引导进行中：优先接回脚下悬浮平台，再尝试路径引导面，最后才判空
+        if (giantStatueEvent.active && !giantStatueEvent.finalJumpStarted) {
+            const gz = getZFloatingPlatformY(worldX, currentY);
+            if (gz != null) return gz;
+            const g2 = getGiantStatueGuideFloorY(worldX);
+            if (g2 != null) return g2;
+            const pts = giantStatueEvent.pathPoints || [];
+            const p0 = pts[0];
+            if (p0 && pts.length > 0) {
+                const xMin = Math.min(...pts.map(p => p.x));
+                const xMax = Math.max(...pts.map(p => p.x));
+                if (worldX >= xMin - 500 && worldX <= xMax + 400) {
+                return p0.y;
+                }
+            }
+        }
+        const gy = getZFloatingPlatformY(worldX, currentY);
         if (gy != null) return gy;
+        if (giantStatueEvent.active || giantStatueEvent.activated || giantStatueEvent.finalJumpStarted) {
+            // 星尘路径阶段从高空跌落时，直接回归常规地面，不判死亡深渊
+            return baseGround;
+        }
         return height + 3000;
     }
     if (worldX >= SCENE2_BROKEN_PLATFORM_START_X && worldX < SCENE2_BROKEN_PLATFORM_END_X) {
-        // 冗余保险：仅在 43000 极窄衔接点保底
+        // 冗余保险：仅�?43000 极窄衔接点保
         if (worldX >= 42980 && worldX <= 43020) {
             return getScene2ArchBridgeDeckY();
         }
         const gy = getBrokenBridgePlatformY(worldX);
-        // 断桥起点物理缓冲：避免 43000 边界起跳时单帧踩空
+        // 断桥起点物理缓冲：避�?43000 边界起跳时单帧踩
         if (gy == null && worldX <= SCENE2_BROKEN_PLATFORM_START_X + SCENE2_BROKEN_ENTRY_BUFFER_W) {
             return getScene2ArchBridgeDeckY();
         }
-        // 断桥末端衔接保护：避免 50000 前后边界落到 height + 2400
+        // 断桥末端衔接保护：避�?50000 前后边界落到 height + 2400
         if (gy == null && worldX >= SCENE2_BROKEN_PLATFORM_END_X - 240) {
             return getScene2ArchBridgeDeckY();
         }
-        return gy == null ? (height + 2400) : gy;
+        // 断桥防消失：缝隙帧统一托底到桥面，避免角色掉入深渊
+        return gy == null ? getScene2ArchBridgeDeckY() : gy;
     }
     if (worldX >= SCENE2_ARCH_BRIDGE_START_X && worldX <= SCENE2_ARCH_BRIDGE_END_X) {
         // 桥面顶部是实心水平矩形碰撞体
@@ -1012,7 +1966,7 @@ function getGroundHeight(worldX, currentY) {
         if (scene2Ramp.flatUnlocked && worldX >= scene2Ramp.flatStartX) {
             return scene2Ramp.flatY;
         }
-        // 45度角向上，X前进多少，Y就减少多少
+        // 45度角向上，X前进多少，Y就减少多
         return scene2RampEdgeY(worldX);
     }
     for (let stair of skyStairs) {
@@ -1023,11 +1977,10 @@ function getGroundHeight(worldX, currentY) {
             }
         }
     }
-    const handX = 1500, handW = 600;
-    if (worldX > handX && worldX < handX + handW) {
-        const t = (worldX - handX) / handW;
-        const handTop = baseGround - Math.sin(t * Math.PI) * 250;
-        if (currentY + player.height <= handTop + 50) return handTop;
+    const handTop = getHandObstacleY(worldX);
+    if (handTop != null) {
+        // 障碍手改为“实体体积”：地面到轮廓顶都不可穿透，只能沿轮廓跑到顶部
+        return handTop - 26;
     }
     const pts2 = getTerrainPoints();
     if (worldX >= pts2.start && worldX <= pts2.end) {
@@ -1040,13 +1993,7 @@ function getGroundHeight(worldX, currentY) {
         const t = (worldX - hill.x) / hill.w;
         return baseGround - (t < 0.5 ? (t/0.5)*hill.h : (1-t)/0.5*hill.h);
     }
-    const b3 = terrainParams;
-    if (worldX >= b3.bX3 && worldX <= b3.bX3 + b3.w3) {
-        const p3 = b3.bX3 + b3.peakOffset3;
-        if (worldX > p3 - 100 && worldX < p3 + 100) return baseGround - b3.h3;
-        if (worldX < p3) return baseGround - ((worldX - b3.bX3) / (p3 - b3.bX3)) * b3.h3;
-        else return (baseGround - b3.h3) + ((worldX - p3) / (b3.w3 - b3.peakOffset3)) * b3.h3;
-    }
+    // 已移除“第二个高地（b3）”地
     const pts4 = getTerrain4Points();
     if (worldX >= pts4.start && worldX <= pts4.end) {
         if (worldX > pts4.peak - 50 && worldX < pts4.peak + 50) return baseGround - pts4.h;
@@ -1057,8 +2004,7 @@ function getGroundHeight(worldX, currentY) {
 }
 
 /**
- * 脚底 ShapeCast：在脚部宽度上多点采样，取最高地面（最早接触）。
- */
+ * 脚底 ShapeCast：在脚部宽度上多点采样，取最高地面（最早接触）�? */
 function shapeCastGroundAtFeet(worldX, bodyTopY, footWorldY, halfFootW) {
     const hw = Math.max(2, halfFootW || 0);
     const xs = [
@@ -1074,7 +2020,7 @@ function shapeCastGroundAtFeet(worldX, bodyTopY, footWorldY, halfFootW) {
     let hasValid = false;
     for (let i = 0; i < xs.length; i++) {
         const g = getGroundHeight(xs[i], bodyTopY);
-        // 深渊高度忽略，避免边缘一只脚采到“空洞”时把整个人拉下去
+        // 深渊高度忽略，避免边缘一只脚采到“空洞”时把整个人拉下
         if (Number.isFinite(g) && g < height + 1000) {
             highestG = Math.min(highestG, g);
             hasValid = true;
@@ -1201,7 +2147,7 @@ function updateWindTransition() {
         transition.scene2Blend = Math.max(transition.scene2Blend, windTransition.blendStart + (1 - windTransition.blendStart) * u);
         if (windVideo.el) {
             if (windVideo.el.readyState >= 2) {
-                // 视频仅做风效叠加，不做遮挡，避免“黑屏”观感
+                // 视频仅做风效叠加，不做遮挡，避免“黑屏”观
                 const targetVideoAlpha = (0.12 + 0.38 * Math.sin(u * Math.PI)) * (0.65 + 0.35 * (1 - u));
                 windVideo.opacity += (targetVideoAlpha - windVideo.opacity) * 0.18;
                 windVideo.el.style.opacity = `${Math.max(0, Math.min(0.48, windVideo.opacity))}`;
@@ -1310,6 +2256,76 @@ function updateLandingFxDust() {
     else camera.shakeLand = 0;
 }
 
+function isPlayerMovingDownhill() {
+    if (!player.grounded || player.inputLocked) return false;
+    if (Math.abs(player.vx) <= 0.22) return false;
+    const moveDir = player.vx >= 0 ? 1 : -1;
+    const centerX = player.x + player.width * 0.5;
+
+    // 规则优先：只要在三角地形上并朝“离开峰顶”的方向移动，就算下坡。
+    const pts2 = getTerrainPoints();
+    if (centerX >= pts2.start && centerX <= pts2.end) {
+        if ((centerX <= pts2.peak && moveDir < 0) || (centerX >= pts2.peak && moveDir > 0)) return true;
+    }
+    const pts4 = getTerrain4Points();
+    if (centerX >= pts4.start && centerX <= pts4.end) {
+        if ((centerX <= pts4.peak && moveDir < 0) || (centerX >= pts4.peak && moveDir > 0)) return true;
+    }
+
+    const sampleAhead = 24;
+    const gNow = getGroundHeight(centerX, Number.POSITIVE_INFINITY);
+    const gAhead = getGroundHeight(centerX + moveDir * sampleAhead, Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(gNow) || !Number.isFinite(gAhead)) return false;
+    return (gAhead - gNow) > 1.6;
+}
+
+function isOnTriangleDownhillSegment() {
+    if (!player.grounded || player.inputLocked) return false;
+    if (Math.abs(player.vx) <= 0.22) return false;
+    const moveDir = player.vx >= 0 ? 1 : -1;
+    const centerX = player.x + player.width * 0.5;
+    const pad = 10;
+    const pts2 = getTerrainPoints();
+    if (centerX >= pts2.start - pad && centerX <= pts2.end + pad) {
+        if ((centerX <= pts2.peak && moveDir < 0) || (centerX >= pts2.peak && moveDir > 0)) return true;
+    }
+    const pts4 = getTerrain4Points();
+    if (centerX >= pts4.start - pad && centerX <= pts4.end + pad) {
+        if ((centerX <= pts4.peak && moveDir < 0) || (centerX >= pts4.peak && moveDir > 0)) return true;
+    }
+    return false;
+}
+
+function updateDownhillDustFx() {
+    const now = performance.now();
+    if (isPlayerMovingDownhill() && now >= downhillDustFx.nextSpawnAt) {
+        const spawnN = 2 + Math.floor(Math.random() * 2);
+        const footX = player.x + player.width * 0.5;
+        const footY = player.y + player.height - 1;
+        const moveDir = player.vx >= 0 ? 1 : -1;
+        for (let i = 0; i < spawnN; i++) {
+            downhillDustFx.particles.push({
+                x: footX - moveDir * (4 + Math.random() * 10),
+                y: footY + (Math.random() - 0.5) * 3,
+                vx: -moveDir * (0.6 + Math.random() * 1.25),
+                vy: -0.5 - Math.random() * 1.05,
+                life: 1,
+                size: 1.2 + Math.random() * 2.1
+            });
+        }
+        downhillDustFx.nextSpawnAt = now + 34;
+    }
+    for (let i = downhillDustFx.particles.length - 1; i >= 0; i--) {
+        const p = downhillDustFx.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.08;
+        p.vx *= 0.95;
+        p.life -= 0.04;
+        if (p.life <= 0) downhillDustFx.particles.splice(i, 1);
+    }
+}
+
 function updateVoidCapeChain() {
     const shoulderX = player.x + player.width * 0.52 - player.facing * player.width * 0.35;
     const shoulderY = player.y + player.height * 0.3;
@@ -1362,12 +2378,30 @@ function drawLandingDustWorld() {
     ctx.globalAlpha = 1;
 }
 
+function drawDownhillDustWorld() {
+    for (let i = 0; i < downhillDustFx.particles.length; i++) {
+        const p = downhillDustFx.particles[i];
+        ctx.globalAlpha = Math.max(0, p.life * 0.7);
+        ctx.fillStyle = `rgba(205,188,176,${0.55 * p.life})`;
+        ctx.beginPath();
+        ctx.arc(p.x - camera.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
 function initDecorations() {
     ambientStorm = []; stones = []; ringParticles = []; vegetation = []; romanColumns = []; 
     birdsSwarm = []; mtn01Instances = []; mtn02Instances = []; skyStairs = []; expansionRings = []; holyRings = [];
     rampTopShadowParticles = [];
     whiteBirds = []; snowPiles = []; redFlowers = []; watercolorBlobs = []; mountainTreesFar = []; mountainTreesNear = [];
     floatingShards = [];
+    b3LeafBlows = [];
+    b3LeafNextSpawnAt = 0;
+    caveRiseParticles = [];
+    caveRiseNextSpawnAt = 0;
+    scene1FgDust = [];
+    scene1FgDustNextSpawnAt = 0;
     rubbleDragonbonesMid = [];
     farRectTriPeaks = [];
     scene2ColumnsDeck = [];
@@ -1376,6 +2410,37 @@ function initDecorations() {
     brokenBridgePlatforms = [];
     zFloatingPlatforms = [];
     zOrganicTrees = [];
+    downhillDustFx.particles = [];
+    downhillDustFx.nextSpawnAt = 0;
+    leafFallVideo.triggered = false;
+    leafFallVideo.active = false;
+    leafFallVideo.startedAt = 0;
+    leafFallVideo.opacity = 0;
+    destroyLeafFallVideoOverlay();
+    b3TreeVideo.active = false;
+    destroyB3TreeVideoOverlay();
+    giantStatueEvent.active = false;
+    giantStatueEvent.shownAt = 0;
+    giantStatueEvent.anchorX = 0;
+    giantStatueEvent.anchorY = 0;
+    giantStatueEvent.statueX = 0;
+    giantStatueEvent.statueTopY = 0;
+    giantStatueEvent.statueW = 0;
+    giantStatueEvent.statueH = 0;
+    giantStatueEvent.sword = null;
+    giantStatueEvent.contour = null;
+    giantStatueEvent.steps = [];
+    giantStatueEvent.anchorX = 0;
+    giantStatueEvent.anchorY = 0;
+    giantStatueEvent.anchorPulse = 0;
+    giantStatueEvent.activated = false;
+    giantStatueEvent.completed = false;
+    giantStatueEvent.transforming = false;
+    giantStatueEvent.finalJumpStarted = false;
+    giantStatueEvent.landedOnGround = false;
+    giantStatueEvent.activateStartAt = 0;
+    giantStatueEvent.pathPoints = [];
+    giantStatueEvent.pathLit = [];
     lateStageCheckpoint = { x: 0, y: 0, valid: false };
     scene2Ramp.started = false;
     scene2Ramp.startAt = 0;
@@ -1388,9 +2453,9 @@ function initDecorations() {
     scene2Ramp.flatY = 0;
     scene2Ramp.apexX = 0;
     scene2Ramp.apexY = 0;
-    weapons = []; // ✨
-    specialOrb.triggered = false; specialOrb.finalized = false;
-    specialOrb2.triggered = false; specialOrb2.finalized = false;
+    weapons = []; // 
+    specialOrb.triggered = false; specialOrb.finalized = false; specialOrb.ringBurstAt = 0;
+    specialOrb2.triggered = false; specialOrb2.finalized = false; specialOrb2.ringBurstAt = 0;
     debrisOrb.triggered = false; debrisOrb.finalized = false; debrisOrb.pulse = 0;
     platformTopOrb.triggered = false; platformTopOrb.finalized = false; platformTopOrb.pulse = 0;
     transition.scene2Blend = 0;
@@ -1413,6 +2478,8 @@ function initDecorations() {
     voidLineMeteors.list = [];
     initWindTransitionMarker();
     landingFx.dust = [];
+    downhillDustFx.particles = [];
+    downhillDustFx.nextSpawnAt = 0;
     camera.shakeLand = 0;
     poemData.alpha = 0; poemData.show = false;
     player.collectedCount = 0; player.followingParticles = []; player.capeChain = []; player.inputLocked = false;
@@ -1420,12 +2487,12 @@ function initDecorations() {
     [800, 11000, 22000, 36000].forEach(x => mtn01Instances.push({x}));
     [5200, 15000, 27000].forEach(x => mtn02Instances.push({x}));
 
-    // 初始化武器
+    // 初始化武
     for(let i=0; i<35; i++) {
         weapons.push({
             x: Math.random() * 60000,
             type: Math.random() > 0.5 ? 'sword' : 'halberd',
-            depth: Math.random(), // 0 前, 1 后
+            depth: Math.random(), // 0 �? 1 
             rotation: (Math.random() - 0.5) * 0.4,
             scale: 0.6 + Math.random() * 0.4
         });
@@ -1447,8 +2514,8 @@ function initDecorations() {
     }
     const topX = curX, topY = curY;
     skyStairs.push({ x: topX, y: topY, w: 500, h: 50, isTop: true, plant: null });
-    specialOrb2.x = topX; specialOrb2.y = topY - 70;
-    // 参考标注图：放到圆形镂空内偏右下位置
+    specialOrb2.x = topX; specialOrb2.y = topY - 200;
+    // 参考标注图：放到圆形镂空内偏右下位
     debrisOrb.x = terrainParams.bX5 + 255;
     debrisOrb.y = getGroundHeight(debrisOrb.x, Number.POSITIVE_INFINITY) - 210;
     const orbPos = getPlatformTopOrbWorldPos();
@@ -1458,7 +2525,27 @@ function initDecorations() {
     platformTopOrb.finalized = false;
     platformTopOrb.pulse = 0;
 
-    const colCount = 13;
+    const stairNoDecorMinX = terrainParams.stairX - 120;
+    const stairNoDecorMaxX = topX + 620;
+    const randomXOutsideStair = (minX = 0, maxX = 60000) => {
+        for (let t = 0; t < 12; t++) {
+            const x = minX + Math.random() * Math.max(1, maxX - minX);
+            if (x < stairNoDecorMinX || x > stairNoDecorMaxX) return x;
+        }
+        const leftSpan = Math.max(0, stairNoDecorMinX - minX);
+        const rightSpan = Math.max(0, maxX - stairNoDecorMaxX);
+        if (leftSpan <= 0 && rightSpan <= 0) return minX;
+        if (leftSpan <= 0) return stairNoDecorMaxX + Math.random() * rightSpan;
+        if (rightSpan <= 0) return minX + Math.random() * leftSpan;
+        const total = leftSpan + rightSpan;
+        if (Math.random() * total < leftSpan) return minX + Math.random() * leftSpan;
+        return stairNoDecorMaxX + Math.random() * rightSpan;
+    };
+    const moveOutsideStairBand = (x, minX = 0, maxX = 60000) => (
+        (x >= stairNoDecorMinX && x <= stairNoDecorMaxX) ? randomXOutsideStair(minX, maxX) : x
+    );
+
+    const colCount = 7;
     for(let i=0; i<colCount; i++) {
         let colX = 1000 + Math.random() * 55000;
         const colBlocks = []; let curColY = 0; const targetTotalH = height * 2.1; 
@@ -1483,6 +2570,10 @@ function initDecorations() {
     for (let i=0; i<24; i++) whiteBirds.push({ x: Math.random() * 60000, y: height * (0.08 + Math.random() * 0.34), speed: 1.2 + Math.random() * 1.7, size: 3 + Math.random() * 2.2, flap: Math.random() * Math.PI * 2 });
     for (let i=0; i<85; i++) { const sx = 12000 + Math.random() * 43000; snowPiles.push({ x: sx, w: 24 + Math.random() * 110, h: 6 + Math.random() * 22 }); }
     for (let i=0; i<820; i++) { const fx = 10000 + Math.random() * 49000; redFlowers.push({ x: fx, h: 7 + Math.random() * 34, r: 1.3 + Math.random() * 2.3, tilt: (Math.random() - 0.5) * 0.6 }); }
+    weapons.forEach((w) => { w.x = moveOutsideStairBand(w.x, 0, 60000); });
+    vegetation.forEach((v) => { v.x = moveOutsideStairBand(v.x, 0, 60000); });
+    snowPiles.forEach((s) => { s.x = moveOutsideStairBand(s.x, 12000, 55000); });
+    redFlowers.forEach((f) => { f.x = moveOutsideStairBand(f.x, 10000, 59000); });
     for (let i=0; i<18; i++) watercolorBlobs.push({
         x: Math.random() * width,
         y: Math.random() * height * 0.7,
@@ -1508,7 +2599,7 @@ function initDecorations() {
             skew: (Math.random() - 0.5) * 0.38
         });
     }
-    // 第二关已移除碎石龙骨，保留远景矩形三角山峰
+    // 第二关已移除碎石龙骨，保留远景矩形三角山
     for (let i=0; i<70; i++) {
         const x = 12000 + Math.random() * 43000;
         const poly = [];
@@ -1537,7 +2628,7 @@ function initDecorations() {
             entryDropPx: height * (0.22 + Math.random() * 0.2)
         });
     }
-    // 额外前景碎石：数量更多，确保在人物层前，并使用区别于主碎石的配色组
+    // 额外前景碎石：数量更多，确保在人物层前，并使用区别于主碎石的配色
     for (let i=0; i<36; i++) {
         const x = 14000 + Math.random() * 40000;
         const poly = [];
@@ -1568,9 +2659,57 @@ function initDecorations() {
     }
 }
 
+const START_BTN_STATE_SRC = {
+    idle: assets.ui_start_button_01_idle,
+    hover: assets.ui_start_button_01_hover,
+    pressed: assets.ui_start_button_01_pressed
+};
+let startBtnPointerDown = false;
+
+function setStartButtonState(state) {
+    const img = document.getElementById('start-ui-btn-img');
+    if (!img) return;
+    img.src = START_BTN_STATE_SRC[state] || START_BTN_STATE_SRC.idle;
+}
+
+function onStartButtonEnter() {
+    if (startBtnPointerDown) return;
+    setStartButtonState('hover');
+}
+
+function onStartButtonLeave() {
+    startBtnPointerDown = false;
+    setStartButtonState('idle');
+}
+
+function onStartButtonDown(ev) {
+    if (ev) ev.preventDefault();
+    startBtnPointerDown = true;
+    setStartButtonState('pressed');
+}
+
+function onStartButtonUp(ev) {
+    if (ev) ev.preventDefault();
+    if (!startBtnPointerDown) return;
+    startBtnPointerDown = false;
+    setStartButtonState('hover');
+    initGame();
+}
+
+function onStartButtonKeyDown(ev) {
+    if (!ev) return;
+    if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        initGame();
+    }
+}
+
 function initGame() {
     document.getElementById('start-screen').style.display = 'none';
+    showEndingActionButton(false);
     gameState = 'PLAYING';
+    unlockAudioSystem();
+    audioRegistry.playBgm('scene1_main');
     resize(); initDecorations(); restartPlayer();
     requestAnimationFrame(update);
 }
@@ -1610,8 +2749,25 @@ function restartGame() {
     voidFall.recoverAt = 0;
     initWindTransitionMarker();
     landingFx.dust = [];
+    downhillDustFx.particles = [];
+    downhillDustFx.nextSpawnAt = 0;
     camera.shakeLand = 0;
     giantBird.active = false;
+    bridgeLoreEvent.triggered = false;
+    bridgeLoreEvent.active = false;
+    bridgeLoreEvent.phase = 'idle';
+    bridgeLoreEvent.revealLine = 0;
+    bridgeLoreEvent.revealChar = 0;
+    bridgeLoreEvent.revealTick = 0;
+    bridgeLoreEvent.holdFrames = 0;
+    endingLoreEvent.triggered = false;
+    endingLoreEvent.active = false;
+    endingLoreEvent.phase = 'idle';
+    endingLoreEvent.revealLine = 0;
+    endingLoreEvent.revealChar = 0;
+    endingLoreEvent.revealTick = 0;
+    endingLoreEvent.whiteFade = 0;
+    showEndingActionButton(false);
     document.getElementById('pause-screen').style.display = 'none';
     gameState = 'PLAYING';
     initDecorations();
@@ -1641,16 +2797,36 @@ function alignCameraInstant() {
     camera.x = targetCamX;
 
     const inStairArea = player.x > terrainParams.stairX - 800;
-    const vertOffset = (inStairArea && player.y < height * 0.6) ? (height * 0.6 - player.y) : 0;
+    const inRampZone = player.x >= SCENE2_RAMP_START_X && player.x < SCENE2_Z_FLOAT_START_X;
+    const inZFloatZone = player.x >= SCENE2_Z_FLOAT_START_X;
+    const stairOffset = (inStairArea && player.y < height * 0.6) ? (height * 0.6 - player.y) : 0;
+    const rampOffset = (inRampZone && player.y < height * 0.62) ? (height * 0.62 - player.y) : 0;
+    const baseOffset = Math.max(stairOffset, rampOffset);
 
     const pts2 = getTerrainPoints();
     const pts4 = getTerrain4Points();
     const inB1 = player.x > pts2.start - 100 && player.x < pts2.end + 600;
     const inB3 = player.x > terrainParams.bX3 - 100 && player.x < terrainParams.bX3 + terrainParams.w3 + 400;
     const inB4 = player.x > pts4.start - 100 && player.x < pts4.end + 600;
-    const zoom = (inB1 || inB3 || inB4) ? 0.42 : 1.0;
-    let camY = (zoom < 1.0) ? 0 : (-vertOffset);
-    camY = Math.max(-4200, Math.min(4200, camY));
+    const scene1AfterFirstTriFixedY =
+        transition.scene2Blend < 0.01 &&
+        player.x > pts2.end &&
+        player.x < terrainParams.stairX - 800;
+    let zoom = (inB1 || inB4) ? 0.42 : 1.0;
+    let camY;
+    if (inB4) {
+        const b4Target = player.y + player.height - height * 0.72;
+        camY = Math.min(0, b4Target);
+    } else {
+        camY = (scene1AfterFirstTriFixedY && !player.grounded)
+            ? camera.y
+            : ((zoom < 1.0) ? 0 : (-baseOffset));
+    }
+    if (inZFloatZone) {
+        // 跳转到悬浮区时立即进入垂直跟随，防止镜头留在地面导致白屏
+        zoom = 1.0;
+        camY = -(player.y - height * 0.65);
+    }
 
     camera.targetZoom = zoom;
     camera.zoom = zoom;
@@ -1660,7 +2836,10 @@ function alignCameraInstant() {
 
 function ensureFollowingParticle(orbX, orbY) {
     const exists = player.followingParticles.some(p => Math.abs(p.x - orbX) < 5 && Math.abs(p.y - orbY) < 5);
-    if (!exists) player.followingParticles.push({ x: orbX, y: orbY, trail: [], seed: Math.random() * Math.PI * 2 });
+    if (!exists) {
+        player.followingParticles.push({ x: orbX, y: orbY, trail: [], seed: Math.random() * Math.PI * 2 });
+        audioRegistry.playSfx('particle_touch');
+    }
     player.collectedCount = Math.max(player.collectedCount, player.followingParticles.length);
 }
 
@@ -1695,10 +2874,12 @@ function syncProgressForJump(targetX) {
     if (targetX >= 6000) {
         specialOrb.triggered = true;
         specialOrb.finalized = true;
+        specialOrb.ringBurstAt = 0;
         keepParticles.push({ x: 6200, y: orb1Y });
     } else {
         specialOrb.triggered = false;
         specialOrb.finalized = false;
+        specialOrb.ringBurstAt = 0;
     }
     if (targetX >= debrisOrb.x - 120) {
         debrisOrb.triggered = true;
@@ -1711,10 +2892,12 @@ function syncProgressForJump(targetX) {
     if (targetX >= terrainParams.stairX - 80) {
         specialOrb2.triggered = true;
         specialOrb2.finalized = true;
+        specialOrb2.ringBurstAt = 0;
         keepParticles.push({ x: specialOrb2.x, y: specialOrb2.y });
     } else {
         specialOrb2.triggered = false;
         specialOrb2.finalized = false;
+        specialOrb2.ringBurstAt = 0;
     }
     const orbPos = getPlatformTopOrbWorldPos();
     if (scene2Ramp.flatUnlocked && targetX >= orbPos.x - 120) {
@@ -1774,7 +2957,7 @@ function jumpTo(targetX, preferStair = false) {
 }
 
 function jumpToScene2() {
-    // 取消通天梯掉落过渡后，提供直接进入第二关的暂停节点
+    // 取消通天梯掉落过渡后，提供直接进入第二关的暂停节
     jumpTo(30500, false);
     transition.scene2Blend = 1;
     windTransition.phase = 'done';
@@ -1784,8 +2967,8 @@ function jumpToScene2() {
 }
 
 function jumpToBrokenBridgeZone() {
-    // 安全跳到断桥首段，避免落在衔接缝隙
-    // 先保证斜坡平台高度状态有效，避免断桥参考高度异常
+    // 安全跳到断桥首段，避免落在衔接缝
+    // 先保证斜坡平台高度状态有效，避免断桥参考高度异
     const safeFlatStartX = SCENE2_RAMP_START_X + 360;
     scene2Ramp.started = true;
     scene2Ramp.flatUnlocked = true;
@@ -1801,7 +2984,7 @@ function jumpToBrokenBridgeZone() {
     let forceLandingY = null;
     if (brokenBridgePlatforms.length > 0) {
         const p = brokenBridgePlatforms[0];
-        // 落到首块断桥偏左安全区，避免落在边缘或后续缝隙
+        // 落到首块断桥偏左安全区，避免落在边缘或后续缝
         targetX = p.x + Math.max(36, Math.min(140, p.w * 0.28));
         forceLandingY = p.y - player.height;
     }
@@ -1834,9 +3017,18 @@ function jumpToZFloatingPlatformZone() {
     scene2Ramp.flatY = Math.max(minSafeY, Math.min(maxSafeY, rawFlatY));
     scene2Ramp.unlockedAt = performance.now() - SCENE2_PLATFORM_REVEAL_MS;
 
-    // 暂停菜单跳转：清空后重生，避免旧缓存与当前桥面高度不一致；并避免 ensure 因 length>0 直接 return
+    // 暂停菜单跳转：清空后重生，避免旧缓存与当前桥面高度不一致；并避�?ensure �?length>0 直接 return
     zFloatingPlatforms = [];
     zOrganicTrees = [];
+    giantStatueEvent.active = false;
+    giantStatueEvent.activated = false;
+    giantStatueEvent.completed = false;
+    giantStatueEvent.transforming = false;
+    giantStatueEvent.finalJumpStarted = false;
+    giantStatueEvent.landedOnGround = false;
+    giantStatueEvent.activateStartAt = 0;
+    giantStatueEvent.pathPoints = [];
+    giantStatueEvent.pathLit = [];
     ensureZFloatingPlatforms();
 
     if (!zFloatingPlatforms.length) {
@@ -1855,7 +3047,7 @@ function jumpToZFloatingPlatformZone() {
         player.vy = 0;
         alignCameraInstant();
     }
-    // jumpTo → syncProgressForJump 会 initWindTransitionMarker，把 windTransition.done 置回 false，这里与断桥跳转一致再钉死
+    // jumpTo �?syncProgressForJump �?initWindTransitionMarker，把 windTransition.done 置回 false，这里与断桥跳转一致再钉死
     transition.scene2Blend = 1;
     windTransition.phase = 'done';
     windTransition.done = true;
@@ -1867,7 +3059,7 @@ function jumpToZFloatingPlatformZone() {
 }
 
 function jumpToRampTopRomanColumn() {
-    // 跳到三角斜坡顶部平台罗马柱区域
+    // 跳到三角斜坡顶部平台罗马柱区
     const targetX = 39147;
     // 关键：不要用 targetX 直接反推 flatY（会让斜坡公式在远距离下得到极端负值，导致整屏白）
     const safeFlatStartX = SCENE2_RAMP_START_X + 360;
@@ -1887,6 +3079,285 @@ function jumpToRampTopRomanColumn() {
     destroyWindVideoOverlay();
 }
 
+function jumpToEndpointGuideParticle() {
+    if (gameState === 'MENU') return;
+
+    // 先进入第二关末段并确保悬浮平台存
+    jumpToZFloatingPlatformZone();
+    ensureZFloatingPlatforms();
+    const lastP = getZFloatingFinalPlatform();
+    if (!lastP) return;
+
+    // 先落到终点平台，触发终点事件初始化（生成引导粒子
+    player.x = lastP.x;
+    player.y = lastP.y - player.height;
+    player.vx = 0;
+    player.vy = 0;
+    player.grounded = true;
+    updateGiantStatueEvent();
+
+    // 锚点左侧一点便于起跳；必须留在台面宽度内，否则 Z 区会�?p0.y 托底 �?人物悬在空中
+    if (giantStatueEvent.active) {
+        const half = lastP.w * 0.5;
+        const margin = Math.max(10, Math.min(40, half * 0.14));
+        const minX = lastP.x - half + margin;
+        const maxX = lastP.x + half - margin;
+        const desiredX = giantStatueEvent.anchorX - 100;
+        player.x = Math.max(minX, Math.min(maxX, desiredX));
+        const footX = player.x + player.width * 0.5;
+        const platTop = getZFloatingPlatformY(footX, null);
+        player.y = (platTop != null ? platTop : lastP.y) - player.height;
+        player.vx = 0;
+        player.vy = 0;
+        player.grounded = true;
+    }
+    alignCameraInstant();
+}
+
+function getBrokenBridgeLoreOrbPos() {
+    return {
+        x: SCENE2_BROKEN_PLATFORM_START_X + 430,
+        y: getScene2ArchBridgeDeckY() - 320
+    };
+}
+
+function getEndpointLoreOrbPos() {
+    const layout = getEndpointTwinStatueLayout();
+    const fp = layout.statue1.forearmPlatform;
+    if (fp) {
+        return {
+            x: fp.x,
+            y: fp.y - Math.max(90, fp.h * 5.5)
+        };
+    }
+    ensureZFloatingPlatforms();
+    const lastP = getZFloatingFinalPlatform();
+    if (lastP) return { x: lastP.x, y: lastP.y - 175 };
+    return { x: SCENE2_BROKEN_PLATFORM_END_X + 680, y: height * 0.32 };
+}
+
+function showEndingActionButton(show) {
+    const wrap = document.getElementById('ending-action-wrap');
+    if (!wrap) return;
+    wrap.style.display = show ? 'block' : 'none';
+}
+
+function endGameBackToStart() {
+    window.location.reload();
+}
+
+function lockCameraForLore(evt) {
+    camera.x = evt.lockCamX;
+    camera.y = evt.lockCamY;
+    camera.zoom = evt.lockZoom;
+    camera.targetZoom = evt.lockZoom;
+    camera.targetY = evt.lockCamY;
+}
+
+function startBridgeLoreEvent() {
+    bridgeLoreEvent.triggered = true;
+    bridgeLoreEvent.active = true;
+    bridgeLoreEvent.phase = 'reveal';
+    bridgeLoreEvent.revealLine = 0;
+    bridgeLoreEvent.revealChar = 0;
+    bridgeLoreEvent.revealTick = 0;
+    bridgeLoreEvent.holdFrames = 300; // 约 5 秒
+    bridgeLoreEvent.lockCamX = camera.x;
+    bridgeLoreEvent.lockCamY = camera.y;
+    bridgeLoreEvent.lockZoom = camera.zoom;
+    player.inputLocked = true;
+    player.vx = 0;
+    player.vy = 0;
+    audioRegistry.playSfx('particle_touch');
+    for (let i = 0; i < 5; i++) {
+        expansionRings.push({
+            x: bridgeLoreEvent.x,
+            y: bridgeLoreEvent.y,
+            r: 12 + i * 13,
+            dr: 1.4 + i * 0.4,
+            alpha: 0.75 - i * 0.1,
+            lineW: 2.2 - i * 0.2
+        });
+    }
+}
+
+function startEndingLoreEvent() {
+    endingLoreEvent.triggered = true;
+    endingLoreEvent.active = true;
+    endingLoreEvent.phase = 'white';
+    endingLoreEvent.revealLine = 0;
+    endingLoreEvent.revealChar = 0;
+    endingLoreEvent.revealTick = 0;
+    endingLoreEvent.whiteFade = 0;
+    endingLoreEvent.lockCamX = camera.x;
+    endingLoreEvent.lockCamY = camera.y;
+    endingLoreEvent.lockZoom = camera.zoom;
+    player.inputLocked = true;
+    player.vx = 0;
+    player.vy = 0;
+    audioRegistry.playSfx('particle_touch');
+    for (let i = 0; i < 6; i++) {
+        expansionRings.push({
+            x: endingLoreEvent.x,
+            y: endingLoreEvent.y,
+            r: 10 + i * 14,
+            dr: 1.2 + i * 0.45,
+            alpha: 0.78 - i * 0.1,
+            lineW: 2.4 - i * 0.22
+        });
+    }
+}
+
+function updateLoreEvents() {
+    const bridgeOrb = getBrokenBridgeLoreOrbPos();
+    bridgeLoreEvent.x = bridgeOrb.x;
+    bridgeLoreEvent.y = bridgeOrb.y;
+    bridgeLoreEvent.pulse += 0.06;
+    if (!bridgeLoreEvent.triggered && !endingLoreEvent.active) {
+        const dx = player.x + player.width * 0.5 - bridgeLoreEvent.x;
+        const dy = player.y + player.height * 0.5 - bridgeLoreEvent.y;
+        if (!player.grounded && Math.abs(dx) < 70 && Math.abs(dy) < 72 && player.x >= SCENE2_BROKEN_PLATFORM_START_X - 120) {
+            startBridgeLoreEvent();
+        }
+    }
+
+    const endOrb = getEndpointLoreOrbPos();
+    endingLoreEvent.x = endOrb.x;
+    endingLoreEvent.y = endOrb.y;
+    endingLoreEvent.pulse += 0.05;
+    if (!endingLoreEvent.triggered && !bridgeLoreEvent.active) {
+        const dx = player.x + player.width * 0.5 - endingLoreEvent.x;
+        const dy = player.y + player.height * 0.5 - endingLoreEvent.y;
+        if (!player.grounded && Math.abs(dx) < 76 && Math.abs(dy) < 80 && giantStatueEvent.active) {
+            startEndingLoreEvent();
+        }
+    }
+
+    const stepReveal = (evt, holdThenDone) => {
+        if (!evt.active) return;
+        player.inputLocked = true;
+        player.vx = 0;
+        player.vy = 0;
+        lockCameraForLore(evt);
+        if (evt.phase === 'reveal') {
+            evt.revealTick += 1;
+            if (evt.revealTick >= 2) {
+                evt.revealTick = 0;
+                const line = evt.lines[evt.revealLine] || '';
+                evt.revealChar++;
+                if (evt.revealChar > line.length) {
+                    evt.revealLine++;
+                    evt.revealChar = 0;
+                    if (evt.revealLine >= evt.lines.length) {
+                        evt.revealLine = evt.lines.length;
+                        evt.phase = holdThenDone ? 'hold' : 'done';
+                    }
+                }
+            }
+        } else if (evt.phase === 'hold') {
+            evt.holdFrames -= 1;
+            if (evt.holdFrames <= 0) {
+                evt.phase = 'done';
+            }
+        }
+    };
+
+    stepReveal(bridgeLoreEvent, true);
+    if (bridgeLoreEvent.active && bridgeLoreEvent.phase === 'done') {
+        bridgeLoreEvent.active = false;
+        player.inputLocked = false;
+    }
+
+    if (endingLoreEvent.active) {
+        player.inputLocked = true;
+        player.vx = 0;
+        player.vy = 0;
+        lockCameraForLore(endingLoreEvent);
+        if (endingLoreEvent.phase === 'white') {
+            endingLoreEvent.whiteFade = Math.min(1, endingLoreEvent.whiteFade + 0.014);
+            if (endingLoreEvent.whiteFade >= 1) {
+                endingLoreEvent.phase = 'reveal';
+                endingLoreEvent.revealLine = 0;
+                endingLoreEvent.revealChar = 0;
+                endingLoreEvent.revealTick = 0;
+            }
+        } else {
+            stepReveal(endingLoreEvent, false);
+        }
+        if (endingLoreEvent.phase === 'done') {
+            showEndingActionButton(true);
+        }
+    } else {
+        showEndingActionButton(false);
+    }
+}
+
+function getLoreVisibleLines(evt) {
+    const out = [];
+    const fullLines = Math.max(0, evt.revealLine);
+    for (let i = 0; i < Math.min(evt.lines.length, fullLines); i++) out.push(evt.lines[i]);
+    if (evt.revealLine < evt.lines.length) {
+        out.push(evt.lines[evt.revealLine].slice(0, Math.max(0, evt.revealChar)));
+    }
+    return out;
+}
+
+function drawLoreOverlay() {
+    const drawTextBlock = (lines, baseY, color = '#ffffff', shadow = 'rgba(255,255,255,0.45)') => {
+        if (!lines.length) return;
+        const drawSpacedCenteredText = (text, x, y, spacing) => {
+            if (!text || spacing <= 0) {
+                ctx.fillText(text, x, y);
+                return;
+            }
+            let totalW = 0;
+            for (let k = 0; k < text.length; k++) {
+                totalW += ctx.measureText(text[k]).width;
+            }
+            totalW += Math.max(0, text.length - 1) * spacing;
+            let cursorX = x - totalW * 0.5;
+            for (let k = 0; k < text.length; k++) {
+                const ch = text[k];
+                ctx.fillText(ch, cursorX, y);
+                cursorX += ctx.measureText(ch).width + spacing;
+            }
+        };
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = color;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = shadow;
+        const lineGap = 52; // 缩小行距
+        const charSpacing = 1.2; // 轻微增大字间距
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const alpha = Math.min(1, 0.32 + i * 0.14);
+            ctx.globalAlpha = alpha;
+            ctx.font = "100 16px 'Microsoft YaHei'";
+            drawSpacedCenteredText(line, width * 0.5, baseY + i * lineGap, charSpacing);
+        }
+        ctx.restore();
+    };
+
+    if (bridgeLoreEvent.active) {
+        const lines = getLoreVisibleLines(bridgeLoreEvent);
+        drawTextBlock(lines, height * 0.17);
+    }
+
+    if (endingLoreEvent.active) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, endingLoreEvent.whiteFade));
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.restore();
+        if (endingLoreEvent.phase !== 'white') {
+            const lines = getLoreVisibleLines(endingLoreEvent);
+            drawTextBlock(lines, height * 0.32, '#111111', 'rgba(0,0,0,0.25)');
+        }
+    }
+}
+
 function togglePause() {
     if (gameState === 'MENU') return;
     if (gameState === 'PLAYING') { gameState = 'PAUSED'; document.getElementById('pause-screen').style.display = 'flex'; } 
@@ -1894,7 +3365,7 @@ function togglePause() {
 }
 
 function resize() {
-    const targetRatio = 16 / 9;
+    const targetRatio = LOGIC_W / LOGIC_H;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     let nextW = vw;
@@ -1903,16 +3374,25 @@ function resize() {
         nextH = vh;
         nextW = Math.floor(vh * targetRatio);
     }
+    const displayX = Math.floor((vw - nextW) * 0.5);
+    const displayY = Math.floor((vh - nextH) * 0.5);
 
-    width = canvas.width = nextW;
-    height = canvas.height = nextH;
+    // 固定逻辑尺寸 + 3x 渲染像素密度
+    width = LOGIC_W;
+    height = LOGIC_H;
+    canvas.width = LOGIC_W * RENDER_SCALE;
+    canvas.height = LOGIC_H * RENDER_SCALE;
     canvas.style.width = `${nextW}px`;
     canvas.style.height = `${nextH}px`;
+    applyStartScreenLayout(displayX, displayY, nextW, nextH);
     syncWindOverlayRect();
     syncWindVideoRect();
+    syncLeafFallVideoRect();
 
-    groundH = height * 0.08; playerH = height * 0.11; 
+    groundH = LOGIC_H * 0.08;
+    playerH = LOGIC_H * 0.11;
     player.height = playerH; player.width = playerH * 0.85;
+    updateAudioDebug();
 }
 window.addEventListener('resize', resize);
 
@@ -1921,13 +3401,328 @@ let jumpPressedLast = false;
 window.addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Escape') togglePause(); });
 window.addEventListener('keyup', e => keys[e.code] = false);
 
+const audioSys = {
+    ctx: null,
+    master: null,
+    musicGain: null,
+    sfxGain: null,
+    padOscA: null,
+    padOscB: null,
+    padGain: null,
+    pianoGain: null,
+    celloGain: null,
+    reverb: null,
+    bpm: 85,
+    nextPianoAt: 0,
+    nextFootstepAt: 0,
+    nextRunAt: 0,
+    nextPadModAt: 0,
+    pointLitCount: 0,
+    unlocked: false,
+    ready: false
+};
+
+const AUDIO_MANIFEST = {
+    bgm: {
+        scene1_main: 'Assets/Audio/BGM/scene1.mp3',
+        scene1_layer2: 'Assets/Audio/BGM/scene1_layer2.mp3',
+        transition_scene2: 'Assets/Audio/BGM/transition_scene2.mp3',
+        scene2_main: 'Assets/Audio/BGM/scene2.mp3'
+    },
+    sfx: {
+        jump_whoosh_metal: ['Assets/Audio/SFX/jump.mp3'],
+        stardust_lit_chime_up: [
+            'Assets/Audio/SFX/chime.mp3'
+        ],
+        stair_footstep_magic: [
+            'Assets/Audio/SFX/step1.mp3',
+            'Assets/Audio/SFX/step2.mp3'
+        ],
+        particle_touch: [
+            'Assets/Audio/SFX/particle_touch.mp3'
+        ],
+        run_step: [
+            'Assets/Audio/SFX/run1.mp3',
+            'Assets/Audio/SFX/run2.mp3',
+            'Assets/Audio/SFX/run.mp3'
+        ]
+    }
+};
+
+const audioRegistry = {
+    unlocked: false,
+    bgmEls: {},
+    bgmBaseVolume: {},
+    activeBgmKeys: [],
+    sfxMap: {},
+    currentBgmKey: '',
+    missing: [],
+    reportMissing(kind, key, src) {
+        const token = `${kind}:${key}:${src}`;
+        if (this.missing.includes(token)) return;
+        this.missing.push(token);
+        const short = this.missing.slice(-2).join(' || ');
+        updateAudioDebug(`missing ${short}`);
+    },
+    init() {
+        Object.entries(AUDIO_MANIFEST.bgm).forEach(([key, src]) => {
+            const el = new Audio(src);
+            el.loop = true;
+            el.preload = 'auto';
+            const baseVol = this.getBgmBaseVolume(key);
+            el.volume = baseVol;
+            this.bgmBaseVolume[key] = baseVol;
+            el.addEventListener('error', () => this.reportMissing('bgm', key, src));
+            this.bgmEls[key] = el;
+        });
+        Object.entries(AUDIO_MANIFEST.sfx).forEach(([key, sources]) => {
+            const list = Array.isArray(sources) ? sources : [sources];
+            this.sfxMap[key] = list.map((src, idx) => {
+                const el = new Audio(src);
+                el.preload = 'auto';
+                el.volume = 0.85;
+                if (key === 'run_step') el.volume = 0.1375;
+                el.addEventListener('error', () => this.reportMissing('sfx', `${key}[${idx}]`, src));
+                return el;
+            });
+        });
+    },
+    unlock() {
+        this.unlocked = true;
+    },
+    getBgmBaseVolume(key) {
+        if (key === 'scene1_layer2') return 0.42;
+        if (key === 'transition_scene2') return 0.3;
+        return 0.65;
+    },
+    fadeBgmTo(key, targetVol, durationMs, stopWhenZero) {
+        const el = this.bgmEls[key];
+        if (!el) return;
+        const startVol = el.volume;
+        const startAt = performance.now();
+        const step = () => {
+            const t = Math.min(1, (performance.now() - startAt) / Math.max(1, durationMs));
+            el.volume = startVol + (targetVol - startVol) * t;
+            if (t < 1) {
+                requestAnimationFrame(step);
+            } else if (stopWhenZero && targetVol <= 0.001) {
+                el.pause();
+                el.currentTime = 0;
+            }
+        };
+        step();
+    },
+    playBgm(key) {
+        if (!this.unlocked) return false;
+        const targetKeys = key === 'scene1_main' ? ['scene1_main', 'scene1_layer2'] : [key];
+        const nextKeys = targetKeys.filter((k) => !!this.bgmEls[k]);
+        if (!nextKeys.length) return false;
+        const sameSet = this.activeBgmKeys.length === nextKeys.length && this.activeBgmKeys.every((k) => nextKeys.includes(k));
+        if (sameSet) return false;
+        const prevKeys = [...this.activeBgmKeys];
+        prevKeys.forEach((k) => this.fadeBgmTo(k, 0, 850, true));
+        this.activeBgmKeys = [...nextKeys];
+        this.currentBgmKey = key;
+        nextKeys.forEach((k) => {
+            const el = this.bgmEls[k];
+            const baseVol = this.bgmBaseVolume[k] ?? this.getBgmBaseVolume(k);
+            el.volume = 0.001;
+            el.currentTime = 0;
+            el.play().catch(() => {});
+            this.fadeBgmTo(k, baseVol, 1200, false);
+        });
+        return true;
+    },
+    playSfx(key) {
+        if (!this.unlocked) return false;
+        const pool = this.sfxMap[key];
+        if (!pool || !pool.length) return false;
+        const base = pool[Math.floor(Math.random() * pool.length)];
+        const el = base.cloneNode();
+        el.volume = base.volume;
+        el.play().catch(() => {});
+        return true;
+    }
+};
+audioRegistry.init();
+
+function updateAudioDebug(extra = '') {
+    const panel = document.getElementById('audio-debug');
+    if (!panel) return;
+    const state = audioSys.ctx ? audioSys.ctx.state : 'none';
+    const miss = audioRegistry.missing.length;
+    panel.textContent = `audio ready=${audioSys.ready} unlocked=${audioSys.unlocked} state=${state} missing=${miss}${extra ? ' | ' + extra : ''}\nres logic=${width}x${height} render=${canvas.width}x${canvas.height} scale=${RENDER_SCALE} window=${window.innerWidth}x${window.innerHeight}`;
+}
+
+function initAudioSystem() {
+    if (audioSys.ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) {
+        updateAudioDebug('AudioContext unsupported');
+        return;
+    }
+    audioSys.ctx = new AC();
+    audioSys.master = audioSys.ctx.createGain();
+    audioSys.musicGain = audioSys.ctx.createGain();
+    audioSys.sfxGain = audioSys.ctx.createGain();
+    audioSys.reverb = createReverb(audioSys.ctx, 2.8, 2.2);
+    audioSys.master.gain.value = 0.92;
+    audioSys.musicGain.gain.value = 0.34;
+    audioSys.sfxGain.gain.value = 0.5;
+    audioSys.musicGain.connect(audioSys.master);
+    audioSys.sfxGain.connect(audioSys.master);
+    audioSys.musicGain.connect(audioSys.reverb);
+    audioSys.reverb.connect(audioSys.master);
+    audioSys.master.connect(audioSys.ctx.destination);
+
+    // Eb major ambient pad (Eb + Bb), slowly breathing.
+    audioSys.padGain = audioSys.ctx.createGain();
+    audioSys.padGain.gain.value = 0.0001;
+    audioSys.padGain.connect(audioSys.musicGain);
+    const padA = audioSys.ctx.createOscillator();
+    const padB = audioSys.ctx.createOscillator();
+    padA.type = 'triangle';
+    padB.type = 'sine';
+    padA.frequency.value = 155.56; // Eb3
+    padB.frequency.value = 233.08; // Bb3
+    padA.connect(audioSys.padGain);
+    padB.connect(audioSys.padGain);
+    padA.start();
+    padB.start();
+    audioSys.padOscA = padA;
+    audioSys.padOscB = padB;
+
+    audioSys.pianoGain = audioSys.ctx.createGain();
+    audioSys.celloGain = audioSys.ctx.createGain();
+    audioSys.pianoGain.gain.value = 0.0001;
+    audioSys.celloGain.gain.value = 0.0001;
+    audioSys.pianoGain.connect(audioSys.musicGain);
+    audioSys.celloGain.connect(audioSys.musicGain);
+
+    audioSys.ready = true;
+    rampParam(audioSys.padGain.gain, 0.22, 1.8);
+    updateAudioDebug('initialized');
+}
+
+function createReverb(ctx, seconds, decay) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const impulse = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const data = impulse.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+            const t = i / len;
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+        }
+    }
+    const conv = ctx.createConvolver();
+    conv.buffer = impulse;
+    return conv;
+}
+
+function rampParam(param, value, time = 0.12) {
+    const t = audioSys.ctx.currentTime;
+    param.cancelScheduledValues(t);
+    param.setTargetAtTime(value, t, Math.max(0.02, time * 0.35));
+}
+
+function playSfx(freq = 440, duration = 0.16, volume = 0.18, type = 'sine', detune = 0) {
+    if (!audioSys.ready || !audioSys.unlocked || !audioSys.ctx) return;
+    const t = audioSys.ctx.currentTime;
+    const osc = audioSys.ctx.createOscillator();
+    const gain = audioSys.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    osc.detune.value = detune;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain);
+    gain.connect(audioSys.sfxGain);
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+}
+
+function playJumpWhoosh() {
+    audioRegistry.playSfx('jump_whoosh_metal');
+}
+
+function playStardustLitChime() {
+    audioRegistry.playSfx('stardust_lit_chime_up');
+}
+
+function playMagicalFootstep() {
+    audioRegistry.playSfx('stair_footstep_magic');
+}
+
+function playRunFootstep() {
+    audioRegistry.playSfx('run_step');
+}
+
+function playPianoNote(freq, gainMul = 1) {
+    if (!audioSys.ready || !audioSys.unlocked || !audioSys.ctx) return;
+    const t = audioSys.ctx.currentTime;
+    const osc = audioSys.ctx.createOscillator();
+    const g = audioSys.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09 * gainMul, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    osc.connect(g);
+    g.connect(audioSys.pianoGain);
+    g.connect(audioSys.reverb);
+    osc.start(t);
+    osc.stop(t + 1.25);
+}
+
+function pulseCello(freq = 77.78) { // Eb2
+    if (!audioSys.ready || !audioSys.unlocked || !audioSys.ctx) return;
+    const t = audioSys.ctx.currentTime;
+    const osc = audioSys.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    const lp = audioSys.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 260;
+    const g = audioSys.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.08, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    osc.connect(lp);
+    lp.connect(g);
+    g.connect(audioSys.celloGain);
+    g.connect(audioSys.reverb);
+    osc.start(t);
+    osc.stop(t + 1.6);
+}
+
+function updateMusicLayers() {
+    if (!audioRegistry.unlocked) return;
+    if (transition.scene2Blend > 0.08 && transition.scene2Blend < 0.98) {
+        audioRegistry.playBgm('transition_scene2');
+    } else if (transition.scene2Blend >= 0.98 || player.x >= SCENE2_RAMP_START_X - 200) {
+        audioRegistry.playBgm('scene2_main');
+    } else {
+        audioRegistry.playBgm('scene1_main');
+    }
+}
+
+function unlockAudioSystem() {
+    audioRegistry.unlock();
+    updateAudioDebug('unlocked');
+}
+
+window.addEventListener('pointerdown', unlockAudioSystem);
+window.addEventListener('keydown', unlockAudioSystem);
+
 function tryStartVoidFall(topStair) {
-    // 按需求移除“通天梯 -> 下坠 -> 第二关地面”的过渡触发
+    // 按需求移除“通天�?-> 下坠 -> 第二关地面”的过渡触发
     return;
 }
 
 function update() {
     if (gameState !== 'PLAYING') return;
+    updateMusicLayers();
 
     if (!skyCurtain.active && player.x >= SCENE2_ARCH_BRIDGE_START_X - 80) {
         skyCurtain.active = true;
@@ -1956,7 +3751,7 @@ function update() {
                 scene2Ramp.flatUnlocked = true;
                 scene2Ramp.unlockedAt = rampNow;
                 scene2Ramp.flatStartX = player.x; // 20秒到达的当前位置就是平地起点
-                // 计算 45 度角的当前 Y 高度
+                // 计算 45 度角的当�?Y 高度
                 scene2Ramp.flatY = scene2RampEdgeY(player.x);
             }
         }
@@ -1968,6 +3763,8 @@ function update() {
     if (transition.scene2Blend > 0.01 || player.x >= SCENE2_Z_FLOAT_START_X - 900) {
         ensureZFloatingPlatforms();
     }
+    updateGiantStatueEvent();
+    updateGiantStardustPath();
     if (player.x >= SCENE2_Z_FLOAT_START_X - 60 && (!lateStageCheckpoint.valid || lateStageCheckpoint.x < SCENE2_Z_FLOAT_START_X - 20)) {
         const zEntry = getZFloatingEntryCheckpoint();
         lateStageCheckpoint.x = zEntry.x;
@@ -1979,8 +3776,11 @@ function update() {
     tryStartWindTransition();
     updateWindTransition();
     updateAmbientWindBurst(performance.now());
+    updateLeafFallVideoEvent(performance.now());
+    updateB3TreeVideoEvent();
 
     updateLandingFxDust();
+    updateDownhillDustFx();
 
     const topStair = skyStairs.find(s => s.isTop);
     const inVoidFall = voidFall.phase === 'falling';
@@ -2002,12 +3802,34 @@ function update() {
     jumpPressedLast = jumpDown;
     const ambientSlowMul = ambientWindBurst.active ? 0.52 : 1;
     if (!player.inputLocked && !inVoidFall) {
-        if (keys['ArrowRight'] || keys['KeyD']) { player.vx += player.accel * ambientSlowMul; player.facing = 1; moving = true; }
-        if (keys['ArrowLeft'] || keys['KeyA']) { player.vx -= player.accel * ambientSlowMul; player.facing = -1; moving = true; }
+        const caveSpeedMul = isPlayerInScene1Cave() ? 1.22 : 1;
+        if (keys['ArrowRight'] || keys['KeyD']) { player.vx += player.accel * ambientSlowMul * caveSpeedMul; player.facing = 1; moving = true; }
+        if (keys['ArrowLeft'] || keys['KeyA']) { player.vx -= player.accel * ambientSlowMul * caveSpeedMul; player.facing = -1; moving = true; }
         if (jumpPressed && player.jumpCount < player.maxJumps) {
             player.vy = player.jumpForce;
             player.grounded = false;
             player.jumpCount++;
+            playJumpWhoosh();
+        }
+    }
+
+    // Magical footsteps on sky stairs / ramp when grounded and moving.
+    const movingHoriz = Math.abs(player.vx) > 0.5;
+    const onStairLike = player.x >= terrainParams.stairX - 80 && player.x < SCENE2_BROKEN_PLATFORM_START_X;
+    if (player.grounded && movingHoriz && onStairLike && audioRegistry.unlocked) {
+        const beatStep = (60 / 85) * 0.5;
+        const nowSec = performance.now() / 1000;
+        if (nowSec >= audioSys.nextFootstepAt) {
+            audioSys.nextFootstepAt = nowSec + beatStep;
+            playMagicalFootstep();
+        }
+    }
+    if (player.grounded && movingHoriz && !onStairLike && audioRegistry.unlocked) {
+        const runStep = 0.22;
+        const nowSec = performance.now() / 1000;
+        if (nowSec >= audioSys.nextRunAt) {
+            audioSys.nextRunAt = nowSec + runStep;
+            playRunFootstep();
         }
     }
 
@@ -2103,8 +3925,12 @@ function update() {
         player.vx *= friction; player.vy += gravity; player.x += player.vx; player.y += player.vy;
         tryStartVoidFall(topStair);
         if (voidFall.phase !== 'falling') {
+            // 激活前不进入”硬防坠”模式，避免终点平台处悬浮影响起跳触碰锚
+            const inGiantGuide = giantStatueEvent.active && giantStatueEvent.activated && !giantStatueEvent.finalJumpStarted;
+            // 路径行走期：�?activated 解耦（落地�?activated �?false，仍须贴合星尘路径直�?completed
+            const inStardustWalk = giantStatueEvent.active && giantStatueEvent.finalJumpStarted && !giantStatueEvent.completed;
             // 断桥/悬浮平台区域使用脚底多点采样，避免在平台边缘单点判定坠落
-            const inLateSceneDanger = player.x >= SCENE2_BROKEN_PLATFORM_START_X - 120;
+            const inLateSceneDanger = inGiantGuide || inStardustWalk || player.x >= SCENE2_BROKEN_PLATFORM_START_X - 120;
             const currentGround = inLateSceneDanger
                 ? shapeCastGroundAtFeet(
                     player.x + player.vx * 0.1,
@@ -2113,7 +3939,37 @@ function update() {
                     player.width * 0.36
                 )
                 : getGroundHeight(player.x, player.y);
-            if (player.y + player.height > currentGround) {
+            if (inGiantGuide) {
+                // 引导期间硬防坠落：只要进入导引状态，始终锁定在可站立高度之上
+                const safeGround = Number.isFinite(currentGround) && currentGround < height + 1200
+                    ? currentGround
+                    : (giantStatueEvent.pathPoints[0]?.y ?? (height - groundH));
+                if (player.y + player.height >= safeGround - 6) {
+                    player.y = safeGround - player.height;
+                    player.vy = 0;
+                    player.grounded = true;
+                } else if (player.vy > 0) {
+                    // 向下速度在引导期钳制，防止单帧判空造成坠落
+                    player.vy = 0;
+                }
+            } else if (inStardustWalk) {
+                // 星尘路径行走期间：强制跟随路径斜面，避免陡坡脱离导致人物漂浮
+                const probeX = player.x + player.width * 0.5 + player.vx * 0.35;
+                const roadY = getStardustRoadY(probeX);
+                const footY = player.y + player.height;
+                const canMagnetToRoad = roadY != null && (player.vy > -4.5 || footY > roadY + 2);
+                if (canMagnetToRoad) {
+                    // 贴合路径：陡坡单帧下落过大时也拉回，避免“看得见线却踩不上
+                    player.y = roadY - player.height;
+                    player.vy = 0;
+                    player.grounded = true;
+                } else if (player.y + player.height > currentGround) {
+                    player.y = currentGround - player.height;
+                    player.vy = 0; player.grounded = true;
+                } else {
+                    player.grounded = false;
+                }
+            } else if (player.y + player.height > currentGround) {
                 player.y = currentGround - player.height;
                 player.vy = 0; player.grounded = true;
             } else {
@@ -2132,13 +3988,13 @@ function update() {
         }
     }
 
-    // 新逻辑：后段踩空后不持续下坠，直接回退到上一个安全坐标
+    // 新逻辑：后段踩空后不持续下坠，直接回退到上一个安全坐
     const inLateStage = player.x >= SCENE2_BROKEN_PLATFORM_START_X + 220;
     const inZFloatStage = player.x >= SCENE2_Z_FLOAT_START_X - 80;
-    if (!inVoidFall && inLateStage && lateStageCheckpoint.valid && !player.grounded && player.vy > 0) {
-        // 只有当人物真正掉到屏幕底部以下，且处于垂直下落状态时才回溯
+    if (!inVoidFall && inLateStage && lateStageCheckpoint.valid && !player.grounded && player.vy > 0 && !(giantStatueEvent.active || giantStatueEvent.activated || giantStatueEvent.finalJumpStarted)) {
+        // 只有当人物真正掉到屏幕底部以下，且处于垂直下落状态时才回
         const isBelowScreen = player.y > height + 100;
-        const isWayBelowPlatform = player.y > (lateStageCheckpoint.y + 600); // 增加容错高度到600
+        const isWayBelowPlatform = player.y > (lateStageCheckpoint.y + 600); // 增加容错高度�?00
         if (isBelowScreen || isWayBelowPlatform) {
             for (let i = 0; i < 16; i++) {
                 ringParticles.push({
@@ -2158,7 +4014,7 @@ function update() {
             player.inputLocked = false;
             player.state = 'idle';
             if (inZFloatStage) {
-                const zCamY = -(player.y - height * 0.65);
+                const zCamY = player.y - height * 0.65;
                 camera.targetY = zCamY;
                 camera.y = zCamY;
             } else {
@@ -2180,12 +4036,31 @@ function update() {
     const windActive = (windTransition.phase !== 'idle' && !windTransition.done) || ambientWindBurst.active;
     const gust = windActive ? 0.72 + 0.28 * Math.sin(performance.now() * 0.0018 + camera.x * 0.00015) : 1;
     const windDir = -1;
+    updateB3LeafBlows(windN, gust, windDir);
+    updateScene1CaveRiseParticles(windN);
+    updateScene1ForegroundDust(windN, gust);
 
-    // ✨ 收集粒子跟随逻辑（虚空下坠时由流星逻辑单独更新）
+    // �?收集粒子跟随逻辑（虚空下坠时由流星逻辑单独更新
     const isPlayerStopped = !inVoidFall && Math.abs(player.vx) < 0.12 && player.grounded && !moving;
     const hasFourBodies = player.followingParticles.length >= 4;
     const waistAnchorY = player.y + player.height * 0.58;
     if (!inVoidFall) player.followingParticles.forEach((p, i) => {
+        if (giantStatueEvent.activated && !giantStatueEvent.completed) {
+            const idx = Math.max(0, Math.min(giantStatueEvent.pathPoints.length - 1, p.stardustTarget || 0));
+            const pt = giantStatueEvent.pathPoints[idx];
+            if (pt) {
+                if (p.stardustPinned) {
+                    p.x = pt.x + Math.sin(Date.now() * 0.004 + idx) * 1.4;
+                    p.y = pt.y + Math.cos(Date.now() * 0.0045 + idx * 0.8) * 1.1;
+                } else {
+                    p.x += (pt.x - p.x) * 0.12;
+                    p.y += (pt.y - p.y) * 0.12;
+                }
+            }
+            p.trail.unshift({ x: p.x, y: p.y });
+            if (p.trail.length > 14) p.trail.pop();
+            return;
+        }
         if (typeof p.seed !== "number") p.seed = Math.random() * Math.PI * 2;
         const t = Date.now() * 0.0042 + p.seed;
         const inStairJumpLift = !player.grounded && player.x > terrainParams.stairX - 900 && player.x < terrainParams.stairX + 1700;
@@ -2195,7 +4070,7 @@ function update() {
         let lerpY = 0.14;
 
         if (hasFourBodies || isPlayerStopped) {
-            // 静止时切到“三体”式互扰环绕：不同角速度+耦合项，形成非规则轨道。
+            // 静止时切到“三体”式互扰环绕：不同角速度+耦合项，形成非规则轨道
             const nodeCount = Math.max(3, player.followingParticles.length);
             const phase = (Math.PI * 2 * i) / nodeCount;
             const baseR = hasFourBodies ? 28 : 22;
@@ -2237,32 +4112,73 @@ function update() {
         if(p.trail.length > 24) p.trail.pop();
     });
 
-    player.frameTimer = (player.frameTimer || 0) + 0.18;
+    const prevState = player.state;
+    const downhillMove = isPlayerMovingDownhill();
+    const triangleDownhill = isOnTriangleDownhillSegment();
     if (!player.grounded) player.state = 'jump';
+    else if (triangleDownhill || downhillMove) player.state = 'downhill';
     else if (moving || Math.abs(player.vx) > 0.5) player.state = 'run';
     else player.state = 'idle';
     if (inVoidFall && voidFall.fallState === 'freeFall') player.state = 'idle';
+    if (player.state !== prevState) player.frameTimer = 0;
     const anim = images[player.state];
-    if (anim && anim.length > 0) player.frame = Math.floor(player.frameTimer) % anim.length;
+    if (anim && anim.length > 0) {
+        if (player.state === 'jump') {
+            // 跳跃改为“按物理阶段选帧”，避免循环错序与卡
+            const jumpFrames = anim.length;
+            let idx = 0;
+            if (jumpFrames <= 3) {
+                // 新版 3 帧：上升 / 顶点 / 下落
+                if (player.vy < -2.0) idx = 0;
+                else if (player.vy < 2.0) idx = 1;
+                else idx = 2;
+            } else {
+                if (player.vy < -12) idx = 0;
+                else if (player.vy < -8) idx = 1;
+                else if (player.vy < -4) idx = 2;
+                else if (player.vy < 0.8) idx = 3;
+                else if (player.vy < 4) idx = 4;
+                else if (player.vy < 8) idx = 5;
+                else idx = 6;
+                // 多帧资源时使�?recover 作为落地前缓冲帧
+                if (jumpFrames >= 8 && player.vy > 10) idx = 7;
+            }
+            player.frame = Math.max(0, Math.min(jumpFrames - 1, idx));
+        } else {
+            const step = player.state === 'run' ? 0.22 : 0.12;
+            player.frameTimer = (player.frameTimer || 0) + step;
+            player.frame = Math.floor(player.frameTimer) % anim.length;
+        }
+    }
 
     if (!inVoidFall) {
         const targetCamX = player.x - width * 0.5;
         const inStairArea = player.x > terrainParams.stairX - 800;
         const inRampZone = player.x >= SCENE2_RAMP_START_X && player.x < SCENE2_Z_FLOAT_START_X;
         const inBrokenBridgeZone = player.x >= SCENE2_BROKEN_PLATFORM_START_X && player.x < SCENE2_BROKEN_PLATFORM_END_X;
-        const inZFloatZone = false;
+        const inZFloatZone = player.x >= SCENE2_Z_FLOAT_START_X && !giantStatueEvent.completed;
+        const inStardustDescent = giantStatueEvent.active && !giantStatueEvent.completed;
         const stairOffset = (inStairArea && player.y < height * 0.6) ? (height * 0.6 - player.y) : 0;
         const rampOffset = (inRampZone && player.y < height * 0.62) ? (height * 0.62 - player.y) : 0;
         const pts2 = getTerrainPoints(); const pts4 = getTerrain4Points();
         const inB1 = player.x > pts2.start - 100 && player.x < pts2.end + 600;
         const inB3 = player.x > terrainParams.bX3 - 100 && player.x < terrainParams.bX3 + terrainParams.w3 + 400;
         const inB4 = player.x > pts4.start - 100 && player.x < pts4.end + 600;
+        // 第一关：过第一个三角高地（pts2 右端）之后、通天梯抬镜之�?�?起跳时垂直镜头不跟人物，仅水平跟
+        const scene1AfterFirstTriFixedY =
+            transition.scene2Blend < 0.01 &&
+            player.x > pts2.end &&
+            player.x < terrainParams.stairX - 800;
 
         // 纯坐标分水岭：斜坡模式与悬浮模式并存切换
         const baseTargetY = -Math.max(rampOffset, stairOffset);
-        if (inZFloatZone) {
+        if (inStardustDescent) {
+            // 星尘天梯下降期：取消额外上下限限制，线性跟随玩家回
+            camera.targetZoom = 0.56;
+            camera.targetY = player.y - height * 0.56;
+        } else if (inZFloatZone) {
             camera.targetZoom = 1.0;
-            const zFloatTargetY = -(player.y - height * 0.65);
+            const zFloatTargetY = player.y - height * 0.65;
             const deckY = getScene2ArchBridgeDeckY();
             const onZTransitionDeck = (player.x <= SCENE2_Z_FLOAT_START_X + 160) && player.grounded && ((player.y + player.height) >= deckY - 10);
             // 50000 过渡锁：仍在桥面过渡段时，不要让镜头突然下移
@@ -2271,7 +4187,7 @@ function update() {
             camera.targetZoom = 1.0;
             const onRampTopPlatform = scene2Ramp.flatUnlocked && player.x >= scene2Ramp.flatStartX;
             if (onRampTopPlatform || inBrokenBridgeZone) {
-                // 登上三角斜坡平台后镜头固定，不再随人物跳跃改变高度
+                // 三角斜坡顶部与断桥段均使用固定平台镜头
                 const fixedDeckY = inBrokenBridgeZone ? getScene2ArchBridgeDeckY() : scene2Ramp.flatY;
                 const platformOffset = (fixedDeckY < height * 0.62) ? (height * 0.62 - fixedDeckY) : 0;
                 // 固定模式下不能再叠加 stairOffset（它依赖 player.y，会导致跳跃时镜头抖动）
@@ -2280,8 +4196,15 @@ function update() {
                 camera.targetY = baseTargetY;
             }
         } else {
-            camera.targetZoom = (inB1 || inB3 || inB4) ? 0.42 : 1.0;
-            camera.targetY = baseTargetY;
+            camera.targetZoom = (inB1 || inB4) ? 0.42 : 1.0;
+            let ty = baseTargetY;
+            if (inB4) {
+                // 第四三角区：镜头Y轴固定，不跟随玩家脚步
+                ty = baseTargetY;
+            } else if (scene1AfterFirstTriFixedY && !player.grounded) {
+                ty = camera.y;
+            }
+            camera.targetY = ty;
         }
         const isZoomedOut = camera.targetZoom < 1.0;
         const camXDeadzone = inZFloatZone ? 0 : (isZoomedOut ? 22 : 0);
@@ -2293,9 +4216,12 @@ function update() {
         // 统一垂直平滑，避免被分支条件打断
         camera.y += (camera.targetY - camera.y) * 0.1;
     }
+    sanitizeCameraState();
 
-    // 50000 后坠落安全网：回到悬浮区起始平台中心，避免人物消失
-    if (!inVoidFall && player.x >= SCENE2_Z_FLOAT_START_X && player.y > height + 200) {
+    updateLoreEvents();
+
+    // 50000 后坠落安全网：仅非星尘事件阶段启
+    if (!inVoidFall && player.x >= SCENE2_Z_FLOAT_START_X && player.y > height + 200 && !(giantStatueEvent.active || giantStatueEvent.activated || giantStatueEvent.finalJumpStarted)) {
         ensureZFloatingPlatforms();
         const back = getZFloatingEntryCheckpoint();
         player.x = back.x;
@@ -2305,20 +4231,24 @@ function update() {
         player.grounded = true;
         player.inputLocked = false;
         player.state = 'idle';
-        camera.targetY = -(player.y - height * 0.65);
+        camera.targetY = player.y - height * 0.65;
         camera.y = camera.targetY;
     }
 
     // 诗篇逻辑
     if (!specialOrb.triggered && Math.abs(player.x - 6200) < 80 && player.grounded) {
-        specialOrb.triggered = true; poemData.show = true; poemData.state = 'fadein'; poemData.isFirst = true;
+        specialOrb.triggered = true; specialOrb.ringBurstAt = performance.now(); poemData.show = true; poemData.state = 'fadein'; poemData.isFirst = true;
+        audioRegistry.playSfx('particle_touch');
+        playStardustLitChime();
         poemData.lines = ["立于高地，", "视线穿越尘世与心灵。", "曾被遮蔽的方向，", "在静默中显现。"];
         player.inputLocked = true; player.vx = 0;
         for (let i = 0; i < 3000; i++) { const a = (i/3000)*Math.PI*2, s=15+Math.random()*20; ringParticles.push({x:6200, y:height-groundH-height*0.55-50, vx:Math.cos(a)*s, vy:Math.sin(a)*s, alpha:1, size:1.2}); }
         giantBird.active = true; giantBird.x = width + 600; giantBird.y = height * 0.22;
     }
-    if (!specialOrb2.triggered && Math.abs(player.x - specialOrb2.x) < 50 && Math.abs(player.y - (specialOrb2.y - player.height)) < 40) {
-        specialOrb2.triggered = true; poemData.show = true; poemData.state = 'fadein'; poemData.isFirst = false;
+    if (!specialOrb2.triggered && !player.grounded && Math.abs(player.x - specialOrb2.x) < 50 && Math.abs(player.y - (specialOrb2.y - player.height)) < 40) {
+        specialOrb2.triggered = true; specialOrb2.ringBurstAt = performance.now(); poemData.show = true; poemData.state = 'fadein'; poemData.isFirst = false;
+        audioRegistry.playSfx('particle_touch');
+        playStardustLitChime();
         poemData.lines = ["阴影在穹顶溺亡时", "会折叠成新的对称", "石料们以克重", "计算千年后", "崩塌的环境"];
         player.inputLocked = true; player.vx = 0;
         for(let i=0; i<4; i++) expansionRings.push({ r: 0, dr: 10 + i*8, alpha: 1 });
@@ -2330,6 +4260,8 @@ function update() {
         if (Math.abs(dxDebris) < 65 && Math.abs(dyDebris) < 60 && !player.grounded) {
             debrisOrb.triggered = true;
             debrisOrb.finalized = true;
+            audioRegistry.playSfx('particle_touch');
+            playStardustLitChime();
             for (let i = 0; i < 6; i++) {
                 holyRings.push({
                     r: 20 + i * 24,
@@ -2355,6 +4287,8 @@ function update() {
         if (Math.abs(dxSummit) < 70 && Math.abs(dySummit) < 70) {
             platformTopOrb.triggered = true;
             platformTopOrb.finalized = true;
+            audioRegistry.playSfx('particle_touch');
+            playStardustLitChime();
             for (let i = 0; i < 5; i++) {
                 expansionRings.push({
                     x: platformTopOrb.x,
@@ -2387,7 +4321,7 @@ function update() {
             poemData.alpha -= 0.01; 
             if(poemData.alpha <= 0) { 
                 poemData.alpha = 0; poemData.state = 'end'; player.inputLocked = false; 
-                // ✨ 文字消失后，粒子来到身后
+                // �?文字消失后，粒子来到身后
                 if(poemData.isFirst && !specialOrb.finalized) {
                     player.followingParticles.push({x: 6200, y: height-groundH-height*0.55-50, trail: [], seed: Math.random() * Math.PI * 2});
                     specialOrb.finalized = true;
@@ -2403,7 +4337,14 @@ function update() {
         }
     }
 
-    if (giantBird.active) { giantBird.x -= 2.8; giantBird.flap += 0.04; giantBird.alpha = Math.min(0.65, giantBird.alpha + 0.005); if (giantBird.x < -1500) giantBird.active = false; }
+    if (giantBird.active) {
+        giantBird.x -= 2.8;
+        giantBird.flap += 0.04;
+        giantBird.alpha = Math.min(0.65, giantBird.alpha + 0.005);
+        giantBird.frameTimer += giantBird.fps / 60;
+        giantBird.frame = Math.floor(giantBird.frameTimer) % giantBird.frameCount;
+        if (giantBird.x < -1500) giantBird.active = false;
+    }
     ringParticles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.vx *= 0.985; p.vy *= 0.985; p.alpha -= 0.008; if (p.alpha <= 0) ringParticles.splice(i, 1); });
     expansionRings.forEach((r, i) => { r.r += r.dr; r.alpha -= 0.006; if(r.alpha <= 0) expansionRings.splice(i, 1); });
     holyRings.forEach((r, i) => { r.r += r.dr; r.alpha -= 0.012; if (r.alpha <= 0) holyRings.splice(i, 1); });
@@ -2500,8 +4441,15 @@ function update() {
 }
 
 function drawWeapon(w) {
+    if (isSkyPathForbiddenForProps(w.x)) return;
     const rx = w.x - camera.x; if(rx < -300 || rx > width + 300) return;
     const ry = getGroundHeight(w.x, 9999);
+    const baseGroundY = height - groundH;
+    // 第一关：黑色剑戟不出现在空中与障碍手上
+    if (transition.scene2Blend < 0.01) {
+        if (ry < baseGroundY - 140) return;
+        if (getHandObstacleY(w.x) != null) return;
+    }
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(w.rotation);
@@ -2530,6 +4478,19 @@ function drawWeapon(w) {
 
 function drawSkyStair(stair) {
     const rx = stair.x - camera.x; if(rx < -500 || rx > width + 500) return;
+    if (stair.isTop) {
+        const img = images.lv1_transition_blackred_tree_01;
+        if (isImageReady(img)) {
+            // 用图片替代过渡节点的黑色T型小地形；按图片比例自动匹配宽高
+            const drawH = Math.max(height * 0.88, stair.h * 11.6);
+            const drawW = drawH * (img.width / Math.max(1, img.height));
+            const drawX = rx - drawW * 0.5;
+            const drawY = stair.y + stair.h - drawH;
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        }
+        // 顶部过渡节点不再回退到黑色T型绘制
+        return;
+    }
     ctx.save(); ctx.translate(rx, stair.y);
     const t = transition.scene2Blend;
     const stairDark = t > 0 ? lerpColor("000000", "ffffff", t) : "#000";
@@ -2548,8 +4509,23 @@ function drawSkyStair(stair) {
     ctx.restore();
 }
 
+function drawScene1TransitionTreeAt30152() {
+    const img = images.lv1_transition_blackred_tree_01;
+    if (!isImageReady(img)) return;
+    const worldX = 30152;
+    const sx = worldX - camera.x;
+    if (sx < -600 || sx > width + 600) return;
+    const baseY = getGroundHeight(worldX, 9999);
+    const drawH = height * 0.88;
+    const drawW = drawH * (img.width / Math.max(1, img.height));
+    const drawX = sx - drawW * 0.5;
+    const drawY = baseY - drawH;
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+}
+
 function drawRomanColumn(col) {
     if (col.x >= SCENE2_RAMP_START_X) return;
+    if (isSkyPathForbiddenForProps(col.x)) return;
     const rx = col.x - camera.x; if(rx < -500 || rx > width + 500) return;
     ctx.save(); ctx.translate(rx, getGroundHeight(col.x, 9999));
     ctx.fillStyle = transition.scene2Blend > 0.001 ? "#ffffff" : "#e5e5e5";
@@ -2611,7 +4587,7 @@ function drawScene2SkyColumn() {
     // 先画细长中轴，避免中段视觉断开
     drawBlock(-bodyW * 0.22, -h - capH, bodyW * 0.44, h + capH, "rgba(246,239,241,0.98)", "rgba(146,110,118,0.28)");
 
-    // 由更小方块/矩形堆叠出更精细层数
+    // 由更小方�?矩形堆叠出更精细层数
     const layers = 22;
     let y = -h;
     for (let i = 0; i < layers; i++) {
@@ -2622,20 +4598,20 @@ function drawScene2SkyColumn() {
         const shade = (i % 2 === 0) ? "rgba(249,244,245,0.98)" : "rgba(242,234,237,0.97)";
         drawBlock(xx, y, ww, hh, shade);
 
-        // 隔层叠加正方形块，提升“几何拼贴”密度
+        // 隔层叠加正方形块，提升“几何拼贴”密
         if (i % 3 === 1) {
             const sq = Math.max(8, ww * 0.22);
             drawBlock(-sq * 0.5, y + hh * 0.14, sq, sq, "rgba(252,248,248,0.98)");
         }
 
-        // 轻量边缘破损（三角镂空），避免打穿中轴
+        // 轻量边缘破损（三角镂空），避免打穿中
         const chip = Math.max(4, ww * 0.12);
         if (i % 4 === 0) chipTopRight(xx, y, ww, hh, chip);
         if (i % 5 === 2) chipBottomLeft(xx, y, ww, hh, chip * 0.88);
         y += hh;
     }
 
-    // 顶部与底座压盖
+    // 顶部与底座压
     drawBlock(-bodyW * 0.95, -h - capH, bodyW * 1.9, capH, "rgba(250,246,246,0.99)");
     drawBlock(-bodyW * 0.88, -baseH, bodyW * 1.76, baseH, "rgba(247,240,241,0.99)");
 
@@ -2655,7 +4631,7 @@ function drawScene2SkyColumn() {
         ctx.fill();
     }
 
-    // 中轴分缝线
+    // 中轴分缝
     ctx.strokeStyle = "rgba(138,104,112,0.24)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -2698,7 +4674,7 @@ function drawRuinColumnStack(worldX, heightRatio, widthRatio) {
             : "rgba(242,232,236,0.95)";
         drawBlock(xx, y, ww, hh, fill, "rgba(132,95,104,0.34)");
 
-        // 小正方形插片，提升细碎层次
+        // 小正方形插片，提升细碎层
         if (i % 2 === 0) {
             const sq = Math.max(5, ww * (0.12 + (i % 3) * 0.03));
             const sx = (i % 4 < 2) ? (xx + ww * 0.18) : (xx + ww * 0.62 - sq);
@@ -2728,7 +4704,7 @@ function drawRampTurnpointColumnsBack() {
     if (!scene2Ramp.flatUnlocked) return;
     const reveal = getRampPlatformReveal01();
     if (reveal < 0.35) return;
-    // 后景柱：稍细、稍矮、稍浅，制造纵深
+    // 后景柱：稍细、稍矮、稍浅，制造纵
     const xBack = scene2Ramp.flatStartX + 90;
     drawRuinColumnStack(xBack, 2.7, 0.0185);
 }
@@ -2737,7 +4713,7 @@ function drawRampTurnpointColumnsFront() {
     if (!scene2Ramp.flatUnlocked) return;
     const reveal = getRampPlatformReveal01();
     if (reveal < 0.72) return;
-    // 前景柱：更粗一点、层数更密（由 drawRuinColumnStack 内部分段保证）
+    // 前景柱：更粗一点、层数更密（�?drawRuinColumnStack 内部分段保证
     const xFront = scene2Ramp.flatStartX + 250;
     drawRuinColumnStack(xFront, 3.05, 0.022);
 }
@@ -2751,7 +4727,7 @@ function drawRampTurnpointSymBuilding() {
     // 大幅后移，确保出现在 2 根顶天立地遗迹柱后面
     const xBack = scene2Ramp.flatStartX + 90;
     const xFront = scene2Ramp.flatStartX + 250;
-    const x = Math.max(xBack, xFront) + 800;
+    const x = Math.max(xBack, xFront) + 1300;
     const sx = x - camera.x;
     if (sx < -900 || sx > width + 900) return;
 
@@ -2760,18 +4736,481 @@ function drawRampTurnpointSymBuilding() {
 
     const ih = height * 0.34 * 2.5;
     const iw = ih * (img.width / img.height);
-    // 图片底部与平台顶边齐平
+    // 图片底部与平台顶边齐
     ctx.drawImage(img, sx - iw * 0.5, topAlignY - ih, iw, ih);
+}
+
+function drawEndpointTwinStatues() {
+    if (transition.scene2Blend < 0.01) return;
+    const layout = getEndpointTwinStatueLayout();
+    const baseY = layout.baseY;
+    const mainImg = images.s2_giant_statue_main_01;
+
+    const statues = [
+        {
+            img: mainImg,
+            x: layout.statue1.x,
+            h: layout.statue1.h
+        }
+    ];
+
+    statues.forEach((s) => {
+        if (!isImageReady(s.img)) return;
+        const sx = s.x - camera.x;
+        if (sx < -1100 || sx > width + 1100) return;
+        const ih = s.h;
+        const iw = ih * (s.img.width / Math.max(1, s.img.height));
+        // 底边对齐终点地面
+        ctx.drawImage(s.img, sx - iw * 0.5, baseY - ih, iw, ih);
+    });
+}
+
+function drawEndpointForearmPlatformBack() {
+    if (transition.scene2Blend < 0.01) return;
+    if (!giantStatueEvent.active) return;
+    const fp = getEndpointTwinStatueLayout().statue1.forearmPlatform;
+    const sx = fp.x - camera.x;
+    if (sx < -700 || sx > width + 700) return;
+    ctx.save();
+    // 平台先画，雕像后画，实现“平台在雕像后面被遮挡
+    ctx.fillStyle = "rgba(242,242,246,0.98)";
+    ctx.fillRect(sx - fp.w * 0.5, fp.y - fp.h, fp.w, fp.h);
+    ctx.fillStyle = "rgba(224,224,230,0.92)";
+    ctx.fillRect(sx - fp.w * 0.5, fp.y, fp.w, Math.max(8, fp.h * 1.6));
+    ctx.restore();
 }
 
 function drawGiantBird() {
     if (!giantBird.active) return;
-    ctx.save(); ctx.globalAlpha = giantBird.alpha; ctx.fillStyle = "#111"; 
-    const bx = giantBird.x, by = giantBird.y + Math.sin(giantBird.flap * 0.5) * 25, sc = width * 0.22, flap = Math.sin(giantBird.flap) * 0.5; 
+    const bx = giantBird.x;
+    const by = giantBird.y + Math.sin(giantBird.flap * 0.5) * 25;
+    const sheet = images.s1_sky_bird_sheet;
+    if (isImageReady(sheet)) {
+        const cols = giantBird.sheetCols || 4;
+        const rows = giantBird.sheetRows || 4;
+        const frameCount = giantBird.frameCount || (cols * rows);
+        const f = giantBird.frame % frameCount;
+        const sw = Math.floor(sheet.width / cols);
+        const sh = Math.floor(sheet.height / rows);
+        const sx = (f % cols) * sw;
+        const sy = Math.floor(f / cols) * sh;
+        const drawH = width * 0.22;
+        const drawW = drawH * (sw / Math.max(1, sh));
+        ctx.save();
+        ctx.globalAlpha = giantBird.alpha;
+        ctx.drawImage(sheet, sx, sy, sw, sh, bx - drawW * 0.5, by - drawH * 0.5, drawW, drawH);
+        ctx.restore();
+        return;
+    }
+    // 图集未加载时用旧矢量兜底
+    ctx.save(); ctx.globalAlpha = giantBird.alpha; ctx.fillStyle = "#111";
+    const sc = width * 0.22, flap = Math.sin(giantBird.flap) * 0.5;
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + sc * 0.6, by - sc * 0.02); ctx.lineTo(bx + sc * 0.6, by + sc * 0.02); ctx.fill();
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - sc * 0.12, by + 10); ctx.lineTo(bx, by + 20); ctx.fill();
     ctx.save(); ctx.translate(bx + sc * 0.25, by); ctx.rotate(flap); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-sc * 0.4, -sc * 0.6); ctx.lineTo(sc * 0.1, -sc * 0.5); ctx.fill(); ctx.restore();
     ctx.save(); ctx.translate(bx + sc * 0.35, by); ctx.rotate(-flap); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-sc * 0.4, sc * 0.6); ctx.lineTo(sc * 0.1, sc * 0.5); ctx.fill(); ctx.restore();
+    ctx.restore();
+}
+
+function drawScene1Clouds() {
+    if (transition.scene2Blend > 0.2) return;
+    const img = images.clouds_far;
+    if (!isImageReady(img)) return;
+
+    // Keep original aspect ratio and use fixed cloud instances to avoid per-frame popping/flicker.
+    const baseW = width * 1.05;
+    const baseH = baseW * (img.height / img.width);
+    const fade = (1 - transition.scene2Blend * 0.7);
+    const t = performance.now();
+    const layers = [
+        { y: height * 0.06, scale: 1.0, speed: 0.0042, parallax: 0.05, alpha: 0.22, phase: 0, density: 0.5 },
+        { y: height * 0.11, scale: 0.92, speed: 0.0065, parallax: 0.09, alpha: 0.16, phase: baseW * 0.37, density: 0.5 }
+    ];
+    const stableRand01 = (n) => {
+        const v = Math.sin(n * 12.9898) * 43758.5453;
+        return v - Math.floor(v);
+    };
+    if (!drawScene1Clouds._instances) {
+        // Build once: slot-based cloud positions to avoid overlap.
+        drawScene1Clouds._instances = layers.map((layer, li) => {
+            const arr = [];
+            const slots = 10; // in a 3-screen-wide strip
+            for (let i = 0; i < slots; i++) {
+                const r = stableRand01((li + 1) * 1000 + i * 17);
+                if (r > layer.density) continue; // keep about half, but never overlap slots
+                const center = -1 + (i + 0.5) * (3 / slots); // [-1,2] range
+                const xJitter = (stableRand01((li + 1) * 2100 + i * 19) - 0.5) * 0.08;
+                arr.push({
+                    xNorm: center + xJitter,
+                    yJitter: (stableRand01((li + 1) * 3000 + i * 31) - 0.5) * 24,
+                    scaleJitter: 0.82 + stableRand01((li + 1) * 4000 + i * 37) * 0.28,
+                    alphaJitter: 0.72 + stableRand01((li + 1) * 6000 + i * 43) * 0.22,
+                    flipX: stableRand01((li + 1) * 5000 + i * 41) > 0.5
+                });
+            }
+            return arr;
+        });
+    }
+
+    ctx.save();
+    layers.forEach((layer, li) => {
+        const w = baseW * layer.scale;
+        const h = baseH * layer.scale;
+        const drift = ((t * layer.speed) + layer.phase);
+        const parallaxX = camera.x * layer.parallax;
+        ctx.globalAlpha = layer.alpha * fade;
+        const instances = drawScene1Clouds._instances[li] || [];
+        instances.forEach((inst) => {
+            const iw = w * inst.scaleJitter;
+            const ih = h * inst.scaleJitter;
+            // World movement is smooth; each instance keeps identity, so no flicker.
+            const x = (inst.xNorm * width) - parallaxX - drift;
+            // Wrap into visible neighborhood
+            let sx = x;
+            const wrapW = width * 3;
+            while (sx < -iw - width) sx += wrapW;
+            while (sx > width + iw) sx -= wrapW;
+            const sy = layer.y + inst.yJitter;
+            ctx.globalAlpha = layer.alpha * fade * inst.alphaJitter * 0.8;
+            if (inst.flipX) {
+                ctx.save();
+                ctx.translate(sx + iw, sy);
+                ctx.scale(-1, 1);
+                ctx.drawImage(img, 0, 0, iw, ih);
+                ctx.restore();
+            } else {
+                ctx.drawImage(img, sx, sy, iw, ih);
+            }
+        });
+    });
+    ctx.restore();
+}
+
+function drawMidHillSun() {
+    // 仅第一关显示：在到达中央丘陵时缓慢出现
+    if (transition.scene2Blend > 0.01) return;
+    const hill = terrainParams.midHill;
+    const fadeInStart = 9900;
+    const fadeInEnd = fadeInStart + hill.w * 0.45;
+    const t = (player.x - fadeInStart) / Math.max(1, (fadeInEnd - fadeInStart));
+    const fadeInAlpha = Math.max(0, Math.min(1, t));
+    // 20000 后开始缓慢消失
+    const fadeOutStart = 20000;
+    const fadeOutEnd = 20330;
+    const fadeOutT = (player.x - fadeOutStart) / Math.max(1, (fadeOutEnd - fadeOutStart));
+    const fadeOutAlpha = 1 - Math.max(0, Math.min(1, fadeOutT));
+    const alpha = fadeInAlpha * fadeOutAlpha;
+    if (alpha <= 0.001) return;
+
+    // 太阳保持“画面居中偏下”，并有轻微随人物位移的跟随
+    const hillCenterX = hill.x + hill.w * 0.5;
+    const followX = Math.max(-width * 0.12, Math.min(width * 0.12, (player.x - hillCenterX) * 0.03));
+    const sunX = width * 0.5 + followX;
+    const sunY = height - groundH - height * 0.23;
+    const r = Math.min(height * 0.36, 380);
+
+    ctx.save();
+    // 外发光层
+    const glow = ctx.createRadialGradient(sunX, sunY, r * 0.1, sunX, sunY, r * 1.95);
+    glow.addColorStop(0.0, `rgba(255,255,255,${0.34 * alpha})`);
+    glow.addColorStop(0.45, `rgba(255,255,255,${0.20 * alpha})`);
+    glow.addColorStop(1.0, "rgba(255,255,255,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, r * 1.95, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 实体太阳（山脉后绘制会遮掉下半部分，形成“小半被遮挡”效果）
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = `rgba(255,255,255,${0.72 * alpha})`;
+    ctx.fillStyle = `rgba(255,255,255,${0.92 * alpha})`;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function getB3TreeAnchors() {
+    const tree02X = terrainParams.bX3 + terrainParams.w3 * 0.42;
+    return [
+        { x: tree02X, hMul: 1.18 },
+        { x: tree02X - 1500, hMul: 1.14 }
+    ];
+}
+
+function updateB3LeafBlows(windN, gust, windDir) {
+    if (DISABLE_SCENE1_TREE_LEAF_PARTICLES) {
+        b3LeafBlows.length = 0;
+        return;
+    }
+    if (transition.scene2Blend >= 0.01) {
+        b3LeafBlows.length = 0;
+        return;
+    }
+    const movingFast = Math.abs(player.vx) > 1.0;
+    const anchors = getB3TreeAnchors();
+    const nearAnyTree = anchors.some(t => Math.abs(player.x - t.x) < 760);
+    const now = performance.now();
+    if (nearAnyTree && movingFast && now >= b3LeafNextSpawnAt) {
+        const near = anchors.slice().sort((a, b) => Math.abs(player.x - a.x) - Math.abs(player.x - b.x))[0];
+        const baseY = height - groundH;
+        const canopyY = baseY - height * near.hMul * 0.76;
+        const n = 4 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < n; i++) {
+            const side = (player.x >= near.x) ? -1 : 1;
+            const spread = 24 + Math.random() * 110;
+            b3LeafBlows.push({
+                x: near.x + side * spread + (Math.random() - 0.5) * 34,
+                y: canopyY + (Math.random() - 0.5) * 85,
+                vx: (1.5 + Math.random() * 2.3) * side + (10 + 14 * windN) * gust * windDir * 0.1,
+                vy: -0.55 - Math.random() * 1.25,
+                size: 4.2 + Math.random() * 4.8,
+                alpha: 0.9 + Math.random() * 0.16,
+                rot: Math.random() * Math.PI * 2,
+                vr: (Math.random() - 0.5) * 0.18
+            });
+        }
+        b3LeafNextSpawnAt = now + 35;
+    }
+
+    for (let i = b3LeafBlows.length - 1; i >= 0; i--) {
+        const p = b3LeafBlows[i];
+        p.x += p.vx + (7 + 16 * windN) * gust * windDir * 0.15;
+        p.y += p.vy;
+        p.vy += 0.035;
+        p.vx *= 0.992;
+        p.rot += p.vr;
+        p.alpha -= 0.008;
+        if (p.alpha <= 0.02 || p.y > height - groundH + 20 || p.x < camera.x - 220 || p.x > camera.x + width + 220) {
+            b3LeafBlows.splice(i, 1);
+        }
+    }
+}
+
+function drawB3LeafBlows() {
+    if (DISABLE_SCENE1_TREE_LEAF_PARTICLES) return;
+    if (transition.scene2Blend >= 0.01 || !b3LeafBlows.length) return;
+    ctx.save();
+    for (let i = 0; i < b3LeafBlows.length; i++) {
+        const p = b3LeafBlows[i];
+        const sx = p.x - camera.x;
+        if (sx < -40 || sx > width + 40) continue;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, p.alpha));
+        ctx.translate(sx, p.y);
+        ctx.rotate(p.rot);
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "rgba(240,245,248,0.9)";
+        ctx.fillStyle = "rgba(232,236,240,0.9)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size * 1.45, p.size * 0.78, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(248,250,252,0.75)";
+        ctx.beginPath();
+        ctx.ellipse(p.size * 0.18, -p.size * 0.1, p.size * 0.44, p.size * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
+function drawB3ToPts4ForegroundOccluder() {
+    if (transition.scene2Blend >= 0.01) return;
+    const img = images.b3FgOccluder01;
+    if (!isImageReady(img)) return;
+    const pts4 = getTerrain4Points();
+    const spanStart = terrainParams.bX3 - 80;
+    const spanEnd = pts4.end + 80;
+    // 仅在 b3 到 pts4 的区间内可见
+    if (player.x < spanStart || player.x > spanEnd) return;
+
+    const occluderX = terrainParams.bX3 + terrainParams.w3 + 820;
+    if (occluderX < spanStart || occluderX > spanEnd) return;
+    const drawH = height * 1.02;
+    const drawW = drawH * (img.width / Math.max(1, img.height));
+    const sx = occluderX - drawW * 0.5 - camera.x;
+    const sy = height - groundH - drawH + 6;
+    ctx.drawImage(img, sx, sy, drawW, drawH);
+}
+
+function drawScene1CaveLayer(isForeground = false) {
+    if (transition.scene2Blend >= 0.01) return;
+    const img = isForeground ? images.lv1_cave_fg_01 : images.lv1_cave_bg_01;
+    if (!isImageReady(img)) return;
+
+    const caveX = SCENE1_CAVE_X;
+    // 固定等比绘制：后续不压扁/不拉伸；并在当前基础上放大 1 倍（2x）
+    const baseH = height;
+    const scale = 2.0;
+    const drawH = baseH * scale;
+    const drawW = drawH * (img.width / Math.max(1, img.height));
+    const sx = (caveX - camera.x) - drawW * 0.5;
+    const sy = height - drawH;
+    ctx.drawImage(img, sx, sy, drawW, drawH);
+}
+
+function isPlayerInScene1Cave() {
+    if (transition.scene2Blend >= 0.01) return false;
+    const caveStartX = SCENE1_CAVE_X - 760;
+    return player.x >= caveStartX && player.x <= SCENE1_CAVE_BEAM_END_X;
+}
+
+function updateScene1CaveRiseParticles(windN) {
+    return;
+    if (transition.scene2Blend >= 0.01) {
+        caveRiseParticles.length = 0;
+        return;
+    }
+    const caveStartX = SCENE1_CAVE_X - 900;
+    const inCaveRange = player.x >= caveStartX && player.x <= SCENE1_CAVE_BEAM_END_X;
+    const now = performance.now();
+    if (inCaveRange && now >= caveRiseNextSpawnAt) {
+        const spawnN = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < spawnN; i++) {
+            caveRiseParticles.push({
+                x: player.x + player.width * 0.5 + (Math.random() - 0.5) * 220,
+                y: player.y + player.height - (4 + Math.random() * 10),
+                vx: (Math.random() - 0.5) * 0.35,
+                vy: -0.8 - Math.random() * 1.1,
+                size: 0.9 + Math.random() * 1.4,
+                alpha: 0.48 + Math.random() * 0.26,
+                pulse: Math.random() * Math.PI * 2
+            });
+        }
+        caveRiseNextSpawnAt = now + 80;
+    }
+    if (caveRiseParticles.length > CAVE_RISE_PARTICLE_MAX) {
+        caveRiseParticles.splice(0, caveRiseParticles.length - CAVE_RISE_PARTICLE_MAX);
+    }
+    for (let i = caveRiseParticles.length - 1; i >= 0; i--) {
+        const p = caveRiseParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy -= 0.008;
+        p.alpha -= 0.0045 + windN * 0.0013;
+        p.pulse += 0.08;
+        if (p.alpha <= 0.02 || p.y < -220) caveRiseParticles.splice(i, 1);
+    }
+}
+
+function drawScene1CaveRiseParticles() {
+    return;
+    if (transition.scene2Blend >= 0.01 || !caveRiseParticles.length) return;
+    ctx.save();
+    for (let i = 0; i < caveRiseParticles.length; i++) {
+        const p = caveRiseParticles[i];
+        const sx = p.x - camera.x;
+        if (sx < -20 || sx > width + 20) continue;
+        const rr = p.size * (0.9 + 0.28 * Math.sin(p.pulse));
+        ctx.globalAlpha = Math.max(0, Math.min(1, p.alpha));
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(255,255,255,0.9)";
+        ctx.fillStyle = "rgba(245,248,252,0.95)";
+        ctx.beginPath();
+        ctx.arc(sx, p.y, rr, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
+function updateScene1ForegroundDust(windN, gust) {
+    return;
+    if (transition.scene2Blend >= 0.01) {
+        scene1FgDust.length = 0;
+        return;
+    }
+    const now = performance.now();
+    if (now >= scene1FgDustNextSpawnAt) {
+        const spawnN = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < spawnN; i++) {
+            const yMin = height * 0.08;
+            const yMax = height - groundH - 24;
+            scene1FgDust.push({
+                x: camera.x + width + 20 + Math.random() * 180,
+                y: yMin + Math.random() * (yMax - yMin),
+                vx: -(4.8 + Math.random() * 4.2 + windN * 2.8 * gust),
+                vy: (Math.random() - 0.5) * 0.22,
+                life: 40 + Math.random() * 38,
+                size: 0.55 + Math.random() * 1.1
+            });
+        }
+        scene1FgDustNextSpawnAt = now + 34;
+    }
+
+    for (let i = scene1FgDust.length - 1; i >= 0; i--) {
+        const p = scene1FgDust[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 1;
+        if (p.life <= 0 || p.x < camera.x - 120) scene1FgDust.splice(i, 1);
+    }
+}
+
+function drawScene1ForegroundDust() {
+    return;
+    if (transition.scene2Blend >= 0.01 || !scene1FgDust.length) return;
+    ctx.save();
+    for (let i = 0; i < scene1FgDust.length; i++) {
+        const p = scene1FgDust[i];
+        const sx = p.x - camera.x;
+        if (sx < -20 || sx > width + 20) continue;
+        const a = Math.max(0, Math.min(1, p.life / 60));
+        ctx.globalAlpha = 0.18 + a * 0.42;
+        ctx.strokeStyle = "rgba(238,242,246,0.95)";
+        ctx.lineWidth = p.size;
+        ctx.beginPath();
+        ctx.moveTo(sx, p.y);
+        ctx.lineTo(sx + 5 + p.size * 2.8, p.y - 0.3);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
+function drawScene1CaveFollowBeams() {
+    if (!isPlayerInScene1Cave()) return;
+    // 光束跟随人物，同时叠加微小视差（与山洞背景不同步）
+    const beamParallax = camera.x * 0.01 + Math.sin(performance.now() * 0.0013 + 0.7) * 4;
+    const baseX = player.x - camera.x + player.width * 0.5 + beamParallax;
+    const baseY = -height * 0.08;
+    const beamImg = images.lv1_cave_beam_left_01;
+    if (isImageReady(beamImg)) {
+        // 使用上传图片：仅保留左束；透明度降低一半
+        const drawH = height * 1.05;
+        const drawW = drawH * (beamImg.width / Math.max(1, beamImg.height));
+        const topY = -height * 0.02;
+
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        const leftX = baseX - drawW * 0.62;
+        ctx.drawImage(beamImg, leftX, topY, drawW, drawH);
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+        return;
+    }
+
+    // 回退：程序化单束 45° 光束（半透明）
+    const t = performance.now() * 0.0018;
+    const beamLen = height * 1.35;
+    const beamW = Math.max(28, width * 0.025);
+    ctx.save();
+    const flicker = 0.85 + 0.15 * Math.sin(t * 1.2 + 1.3);
+    ctx.globalAlpha = 0.5;
+    ctx.translate(baseX - 70, baseY);
+    ctx.rotate(Math.PI * 0.25);
+    const g = ctx.createLinearGradient(0, 0, 0, beamLen);
+    g.addColorStop(0.0, `rgba(245,248,255,${0.22 * flicker})`);
+    g.addColorStop(0.55, `rgba(225,232,242,${0.22 * 0.52 * flicker})`);
+    g.addColorStop(1.0, "rgba(210,220,232,0)");
+    ctx.fillStyle = g;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = `rgba(238,244,252,${0.55 * flicker})`;
+    ctx.fillRect(-beamW * 0.5, 0, beamW, beamLen);
+    ctx.globalAlpha = 1.0;
     ctx.restore();
 }
 
@@ -2893,8 +5332,8 @@ function drawFloatingShards(frontLayer = false) {
         const lit = 0.5 + 0.5 * Math.sin(s.rot + s.x * 0.0002);
         const useAccent = s.colorGroup === 'frontAccent';
         const baseBody = useAccent
-            ? [166 + Math.round(lit * 34), 70 + Math.round(lit * 18), 98 + Math.round(lit * 24)]
-            : [132 + Math.round(lit * 30), 42 + Math.round(lit * 14), 62 + Math.round(lit * 20)];
+            ? [232 + Math.round(lit * 18), 224 + Math.round(lit * 14), 228 + Math.round(lit * 14)]
+            : [220 + Math.round(lit * 16), 212 + Math.round(lit * 12), 218 + Math.round(lit * 12)];
 
         // 主体 + 分面 + 边缘高光，增强碎石立体感
         ctx.save();
@@ -2916,9 +5355,9 @@ function drawFloatingShards(frontLayer = false) {
             const a = s.poly[i];
             const b = s.poly[(i + 1) % s.poly.length];
             const faceLit = 0.5 + 0.5 * Math.sin(s.rot + i * 1.13);
-            const fr = (useAccent ? 148 : 118) + Math.round(faceLit * (useAccent ? 44 : 42));
-            const fg = (useAccent ? 56 : 34) + Math.round(faceLit * (useAccent ? 20 : 16));
-            const fb = (useAccent ? 84 : 52) + Math.round(faceLit * (useAccent ? 28 : 24));
+            const fr = (useAccent ? 224 : 212) + Math.round(faceLit * (useAccent ? 20 : 18));
+            const fg = (useAccent ? 214 : 204) + Math.round(faceLit * (useAccent ? 16 : 14));
+            const fb = (useAccent ? 220 : 210) + Math.round(faceLit * (useAccent ? 16 : 14));
             ctx.fillStyle = `rgb(${fr},${fg},${fb})`;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
@@ -2927,14 +5366,6 @@ function drawFloatingShards(frontLayer = false) {
             ctx.closePath();
             ctx.fill();
         }
-
-        ctx.strokeStyle = useAccent ? 'rgb(246,206,214)' : 'rgb(224,176,186)';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(s.poly[0].x, s.poly[0].y);
-        for (let i=1; i<s.poly.length; i++) ctx.lineTo(s.poly[i].x, s.poly[i].y);
-        ctx.closePath();
-        ctx.stroke();
         ctx.restore();
     });
 }
@@ -2952,7 +5383,7 @@ function drawRubbleDragonbonesMid() {
         const baseL = x - w * 0.5;
         const baseR = x + w * 0.5;
 
-        // 主体长三角（白色碎石龙骨）
+        // 主体长三角（白色碎石龙骨
         ctx.fillStyle = `rgba(${220 + Math.round(b.tone * 24)},${220 + Math.round(b.tone * 22)},${224 + Math.round(b.tone * 20)},${b.alpha})`;
         ctx.beginPath();
         ctx.moveTo(topX, gY - h);
@@ -2961,7 +5392,7 @@ function drawRubbleDragonbonesMid() {
         ctx.closePath();
         ctx.fill();
 
-        // 四边形分面 1
+        // 四边形分�?1
         ctx.fillStyle = `rgba(${198 + Math.round(b.tone * 20)},${198 + Math.round(b.tone * 18)},${204 + Math.round(b.tone * 18)},${Math.min(1, b.alpha + 0.1)})`;
         ctx.beginPath();
         ctx.moveTo(topX - w * 0.08, gY - h * 0.78);
@@ -2971,7 +5402,7 @@ function drawRubbleDragonbonesMid() {
         ctx.closePath();
         ctx.fill();
 
-        // 四边形分面 2（暗面）
+        // 四边形分�?2（暗面）
         ctx.fillStyle = `rgba(${170 + Math.round(b.tone * 16)},${170 + Math.round(b.tone * 14)},${178 + Math.round(b.tone * 14)},${Math.min(1, b.alpha + 0.12)})`;
         ctx.beginPath();
         ctx.moveTo(topX - w * 0.12, gY - h * 0.7);
@@ -3018,20 +5449,23 @@ function drawArchBridge() {
     const bridgeDrawEndX = Math.min(SCENE2_ARCH_BRIDGE_END_X, SCENE2_BROKEN_PLATFORM_START_X);
     const bridgeStartSx = bridgeDrawStartX - camera.x;
     const bridgeEndSx = bridgeDrawEndX - camera.x;
-    if (bridgeEndSx < -300 || bridgeStartSx > width + 300) return;
+    const bayW = SCENE2_ARCH_BRIDGE_WIDTH / SCENE2_ARCH_COUNT;
+    const startBay = Math.max(0, Math.floor((bridgeDrawStartX - SCENE2_ARCH_BRIDGE_START_X) / bayW));
+    const endBay = Math.min(SCENE2_ARCH_COUNT - 1, Math.ceil((bridgeDrawEndX - SCENE2_ARCH_BRIDGE_START_X) / bayW));
+    // 以最后实际绘制的 bay 右端为剔除基准，避免超出 bridgeDrawEndX �?bay 桥墩突然闪失
+    const actualRightSx = SCENE2_ARCH_BRIDGE_START_X + (endBay + 1) * bayW - camera.x;
+    if (actualRightSx < -300 || bridgeStartSx > width + 300) return;
 
     const deckY = getScene2ArchBridgeDeckY();
     const deckTopY = deckY;
     const bridgeBodyW = bridgeEndSx - bridgeStartSx;
-    if (bridgeBodyW <= 1) return;
-    const bayW = SCENE2_ARCH_BRIDGE_WIDTH / SCENE2_ARCH_COUNT;
-    const startBay = Math.max(0, Math.floor((bridgeDrawStartX - SCENE2_ARCH_BRIDGE_START_X) / bayW));
-    const endBay = Math.min(SCENE2_ARCH_COUNT - 1, Math.ceil((bridgeDrawEndX - SCENE2_ARCH_BRIDGE_START_X) / bayW));
     const bodyColor = "rgba(252,252,252,0.98)";
 
     // 实心水平桥面（顶边与平台地面齐平，厚度向下）
-    ctx.fillStyle = bodyColor;
-    ctx.fillRect(bridgeStartSx, deckTopY, bridgeBodyW, SCENE2_ARCH_BRIDGE_DECK_THICKNESS);
+    if (bridgeBodyW > 0) {
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(bridgeStartSx, deckTopY, bridgeBodyW, SCENE2_ARCH_BRIDGE_DECK_THICKNESS);
+    }
 
     const drawBraceRect = (x1, y1, x2, y2, thickness, fill) => {
         const dx = x2 - x1;
@@ -3065,7 +5499,7 @@ function drawArchBridge() {
         ctx.fillRect(sx - archR - legW, deckY, legW, legBottom - deckY);
         ctx.fillRect(sx + archR, deckY, legW, legBottom - deckY);
 
-        // 拱门内部矩形钢架：交错斜撑 + 横向矩形梁（只填充，不描线）
+        // 拱门内部矩形钢架：交错斜�?+ 横向矩形梁（只填充，不描线）
         const leftIn = sx - archR + legW * 0.8;
         const rightIn = sx + archR - legW * 0.8;
         const topIn = deckY + 18;
@@ -3074,24 +5508,24 @@ function drawArchBridge() {
         const braceColor = "rgba(246,246,248,0.9)";
         const braceW = Math.max(2, bayW * 0.012);
 
-        // 主 X 交叉
+        // �?X 交叉
         drawBraceRect(leftIn, topIn, rightIn, botIn, braceW, braceColor);
         drawBraceRect(rightIn, topIn, leftIn, botIn, braceW, braceColor);
         // 二层交错
         drawBraceRect(leftIn + (rightIn - leftIn) * 0.16, topIn + 4, rightIn - (rightIn - leftIn) * 0.10, midIn, braceW * 0.82, braceColor);
         drawBraceRect(rightIn - (rightIn - leftIn) * 0.16, topIn + 4, leftIn + (rightIn - leftIn) * 0.10, midIn, braceW * 0.82, braceColor);
-        // 横向矩形梁
+        // 横向矩形
         ctx.fillStyle = braceColor;
         const beamH = Math.max(2, braceW * 0.72);
         ctx.fillRect(leftIn + 6, midIn - beamH * 0.5, (rightIn - leftIn) - 12, beamH);
         ctx.fillRect(leftIn + 10, botIn - 6 - beamH * 0.5, (rightIn - leftIn) - 20, beamH);
-        // 纵向短梁，增加块面细节
+        // 纵向短梁，增加块面细
         const colW = Math.max(2, braceW * 0.55);
         ctx.fillRect(sx - colW * 0.5, topIn + 8, colW, botIn - topIn - 16);
         ctx.fillRect(sx - archR * 0.34, topIn + 12, colW, midIn - topIn - 6);
         ctx.fillRect(sx + archR * 0.34 - colW, topIn + 12, colW, midIn - topIn - 6);
 
-        // 桥面附加细节：上缘分段压条 + 细块面，增强纪念性结构感
+        // 桥面附加细节：上缘分段压�?+ 细块面，增强纪念性结构感
         const capY = deckY + 4 + (i % 2) * 1.5;
         const capW = bayW * 0.72;
         const capX = sx - capW * 0.5;
@@ -3107,7 +5541,7 @@ function drawArchBridge() {
 
 function drawBrokenBridgePlatforms() {
     if (transition.scene2Blend < 0.01) return;
-    if (player.x >= SCENE2_Z_FLOAT_START_X) return; // 50000 后隐藏断桥
+    if (player.x >= SCENE2_BROKEN_PLATFORM_END_X + 220) return; // 过了断桥末端后再隐藏，避�?50000 前后突然消失
     if (!brokenBridgePlatforms.length) return;
     const deckY = getScene2ArchBridgeDeckY();
     const topColor = "rgba(252,252,252,0.98)";
@@ -3141,7 +5575,7 @@ function drawBrokenBridgePlatforms() {
         ctx.fillRect(x + p.w * 0.22 - pierW * 0.5, pierY, pierW, pierH);
         ctx.fillRect(x + p.w * 0.78 - pierW * 0.5, pierY, pierW, pierH * 0.92);
 
-        // 竖向压条，增加桥墩立体细节
+        // 竖向压条，增加桥墩立体细
         ctx.fillStyle = "rgba(222,222,228,0.88)";
         ctx.fillRect(x + p.w * 0.22 - pierW * 0.2, pierY + 6, pierW * 0.16, pierH - 10);
         ctx.fillRect(x + p.w * 0.78 - pierW * 0.2, pierY + 6, pierW * 0.16, pierH * 0.92 - 10);
@@ -3228,7 +5662,7 @@ function drawZFloatingPlatforms() {
         ctx.closePath();
         ctx.fill();
 
-        // 扁平分面：轻微明暗块面，避免大渐变
+        // 扁平分面：轻微明暗块面，避免大渐
         const cx = p.poly.reduce((sum, n) => sum + n.x, 0) / p.poly.length;
         const cy = p.poly.reduce((sum, n) => sum + n.y, 0) / p.poly.length;
         for (let k = 0; k < p.poly.length; k++) {
@@ -3247,7 +5681,7 @@ function drawZFloatingPlatforms() {
             ctx.fill();
         }
 
-        // 细折线网格（深灰/暗红）
+        // 细折线网格（深灰/暗红
         ctx.strokeStyle = "rgba(116,88,98,0.42)";
         ctx.lineWidth = 0.8;
         p.patchLines.forEach((ln) => {
@@ -3257,7 +5691,7 @@ function drawZFloatingPlatforms() {
             ctx.stroke();
         });
 
-        // 外轮廓
+        // 外轮
         ctx.strokeStyle = "rgba(92,72,82,0.74)";
         ctx.lineWidth = 1.05;
         ctx.beginPath();
@@ -3282,6 +5716,106 @@ function drawZFloatingPlatforms() {
 
         ctx.restore();
     });
+}
+
+function drawGiantStatueScene2() {
+    // 终点双雕像由 drawEndpointTwinStatues() 负责，旧单雕像渲染禁
+    if (!ENABLE_GIANT_STATUE) return;
+    if (!giantStatueEvent.active) return;
+    return;
+    const appear = Math.min(1, (performance.now() - giantStatueEvent.shownAt) / 900);
+    const ease = appear * appear * (3 - 2 * appear);
+    const sx = giantStatueEvent.statueX - camera.x;
+    const w = giantStatueEvent.statueW;
+    const h = giantStatueEvent.statueH;
+    const topY = giantStatueEvent.statueTopY;
+
+    ctx.save();
+    ctx.globalAlpha = 0.2 + ease * 0.72;
+    if (isImageReady(images.giant_statue)) {
+        ctx.drawImage(images.giant_statue, sx - w * 0.5, topY, w, h);
+    } else {
+        // 素材未就绪时的简化几何兜底，避免空场
+        ctx.fillStyle = "rgba(230,214,218,0.6)";
+        ctx.beginPath();
+        ctx.moveTo(sx - 120, topY + h * 0.18);
+        ctx.lineTo(sx + 90, topY + h * 0.06);
+        ctx.lineTo(sx + 180, topY + h * 0.44);
+        ctx.lineTo(sx + 130, topY + h * 0.88);
+        ctx.lineTo(sx - 170, topY + h * 0.92);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 这里不再额外绘制长矩形踏板和细线踏板，避免靠近最后平台的辅助线干扰画
+    ctx.restore();
+}
+
+function drawGiantStardustPath() {
+    if (!giantStatueEvent.active) return;
+    const pulseT = giantStatueEvent.anchorPulse;
+
+    if (!giantStatueEvent.activated && !giantStatueEvent.finalJumpStarted) {
+        const ax = giantStatueEvent.anchorX - camera.x;
+        const ay = giantStatueEvent.anchorY;
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "rgba(255,255,255,0.95)";
+        ctx.fillStyle = "rgba(255,255,255,0.98)";
+        ctx.beginPath();
+        ctx.arc(ax, ay, 6.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        for (let i = 0; i < 3; i++) {
+            const r = 16 + i * 11 + Math.sin(pulseT + i * 0.9) * 2.5;
+            ctx.strokeStyle = `rgba(255,255,255,${0.52 - i * 0.14})`;
+            ctx.lineWidth = 1.4 - i * 0.25;
+            ctx.beginPath();
+            ctx.arc(ax, ay, r, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    if (!giantStatueEvent.activated && !giantStatueEvent.finalJumpStarted) return;
+    const pts = giantStatueEvent.pathPoints;
+    const lit = giantStatueEvent.pathLit;
+    if (!pts.length) return;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    for (let i = 0; i < pts.length - 1; i++) {
+        const segLit = giantStatueEvent.finalJumpStarted || (lit[i] && lit[i + 1]);
+        if (!segLit) continue;
+        const a = pts[i];
+        const b = pts[i + 1];
+        ctx.strokeStyle = "rgba(255,255,255,0.86)";
+        ctx.lineWidth = 1.6;
+        ctx.shadowBlur = 9;
+        ctx.shadowColor = "rgba(255,255,255,0.82)";
+        ctx.beginPath();
+        ctx.moveTo(a.x - camera.x, a.y);
+        ctx.lineTo(b.x - camera.x, b.y);
+        ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    for (let i = 0; i < pts.length; i++) {
+        if (!giantStatueEvent.finalJumpStarted && !lit[i]) continue;
+        const p = pts[i];
+        const px = p.x - camera.x;
+        const py = p.y;
+        const tw = Date.now() * 0.008 + i * 0.7;
+        const rr = 4.2 + Math.sin(tw) * 0.9;
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "rgba(255,255,255,0.96)";
+        ctx.fillStyle = "rgba(255,255,255,0.98)";
+        ctx.beginPath();
+        ctx.arc(px, py, rr, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
 }
 
 function drawBridgeSkyCurtain() {
@@ -3337,7 +5871,7 @@ function drawFarRectTriPeaks() {
         const topY = gY - p.h;
         const halfW = p.w * 0.5;
 
-        // 矩形化三角主峰
+        // 矩形化三角主
         ctx.fillStyle = `rgba(196,130,142,${p.alpha})`;
         ctx.beginPath();
         ctx.moveTo(topX - halfW * 0.05, topY);
@@ -3346,7 +5880,7 @@ function drawFarRectTriPeaks() {
         ctx.closePath();
         ctx.fill();
 
-        // 切面矩形块，模拟参考图中的大片几何面
+        // 切面矩形块，模拟参考图中的大片几何
         ctx.fillStyle = `rgba(222,168,178,${p.alpha * 0.7})`;
         ctx.beginPath();
         ctx.moveTo(topX - halfW * 0.12, topY + p.h * 0.26);
@@ -3371,7 +5905,7 @@ function drawWindTransitionColumn() {
     ctx.save();
     ctx.translate(x + sway, gY);
     ctx.fillStyle = 'rgb(16,16,16)';
-    // T 顶横梁
+    // T 顶横
     ctx.fillRect(-w, -h, w * 2, h * 0.24);
     // T 竖干
     ctx.fillRect(-w * 0.18, -h, w * 0.36, h);
@@ -3439,8 +5973,7 @@ function drawRampTopShadowAndParticles() {
     const shadowRx = Math.max(16, player.width * 0.5);
     const shadowRy = Math.max(6, player.height * 0.09);
     const shadowCx = player.x - camera.x + player.width * 0.5;
-    const shadowCy = footY + shadowRy; // 顶部与人物底部齐平
-
+    const shadowCy = footY + shadowRy; // 顶部与人物底部齐�?
     ctx.save();
     ctx.fillStyle = '#b64e52';
     ctx.globalAlpha = 0.72;
@@ -3462,6 +5995,9 @@ function drawSnowAndFlowers() {
     if (transition.scene2Blend < 0.01) return;
     const baseGroundY = height - groundH;
     snowPiles.forEach(s => {
+        if (isSkyPathForbiddenForProps(s.x)) return;
+        // 第二关断桥/悬浮空域不画雪堆
+        if (s.x >= SCENE2_BROKEN_PLATFORM_START_X) return;
         const sx = s.x - camera.x;
         if (sx < -200 || sx > width + 200) return;
         const gy = getGroundHeight(s.x, 9999);
@@ -3475,6 +6011,9 @@ function drawSnowAndFlowers() {
         ctx.fill();
     });
     redFlowers.forEach(f => {
+        if (isSkyPathForbiddenForProps(f.x)) return;
+        // 第二关空中区域（断桥/悬浮）禁用小花，避免漂浮在半空
+        if (f.x >= SCENE2_BROKEN_PLATFORM_START_X) return;
         const fx = f.x - camera.x;
         if (fx < -50 || fx > width + 50) return;
         const gy = getGroundHeight(f.x, 9999);
@@ -3498,6 +6037,7 @@ function drawSnowAndFlowers() {
 function drawScene2RuinMid() {
     if (transition.scene2Blend < 0.01) return;
     scene2RuinsMid.forEach(r => {
+        if (isSkyPathForbiddenForProps(r.x)) return;
         const img = images[r.imgKey];
         if (!isImageReady(img)) return;
         const sx = r.x - camera.x;
@@ -3505,7 +6045,7 @@ function drawScene2RuinMid() {
         const gy = getGroundHeight(r.x, 9999);
         const ih = height * (0.18 + 0.1 * r.scale);
         const iw = ih * (img.width / img.height);
-        // 中景层：不压到人物前景
+        // 中景层：不压到人物前
         ctx.drawImage(img, sx - iw * 0.5, gy - ih + 8, iw, ih);
     });
 }
@@ -3513,6 +6053,7 @@ function drawScene2RuinMid() {
 function drawScene2PlatformColumns() {
     if (transition.scene2Blend < 0.01) return;
     scene2ColumnsDeck.forEach(c => {
+        if (isSkyPathForbiddenForProps(c.x)) return;
         const img = images[c.imgKey];
         if (!isImageReady(img)) return;
         const sx = c.x - camera.x;
@@ -3524,11 +6065,78 @@ function drawScene2PlatformColumns() {
     });
 }
 
+function drawGuideHands() {
+    const t = performance.now() * 0.0024;
+    const hints = [
+        {
+            key: 'guide_hand_l1_stairs_up',
+            show: transition.scene2Blend < 0.01 && player.x < SCENE2_RAMP_START_X,
+            x: terrainParams.stairX + 38,
+            y: () => getGroundHeight(terrainParams.stairX + 38, 9999) - 118,
+            sizeH: height * 0.155
+        },
+        {
+            key: 'guide_hand_l2_ramp_45up',
+            show: transition.scene2Blend > 0.01 && player.x >= SCENE2_RAMP_START_X - 120 && player.x < SCENE2_BROKEN_PLATFORM_START_X + 600,
+            x: SCENE2_RAMP_START_X + 380,
+            y: () => getGroundHeight(SCENE2_RAMP_START_X + 380, 9999) - 92,
+            sizeH: height * 0.11
+        },
+        {
+            key: 'guide_hand_l2_brokenbridge_forward',
+            show: transition.scene2Blend > 0.01 && player.x >= SCENE2_BROKEN_PLATFORM_START_X - 600 && player.x < SCENE2_Z_FLOAT_START_X + 400,
+            x: SCENE2_BROKEN_PLATFORM_START_X + 920,
+            y: () => getScene2ArchBridgeDeckY() - 88,
+            sizeH: height * 0.108
+        },
+        {
+            key: 'guide_hand_l2_float_up',
+            show: transition.scene2Blend > 0.01 && player.x >= SCENE2_Z_FLOAT_START_X - 700,
+            x: SCENE2_Z_FLOAT_START_X + 220,
+            y: () => {
+                const gy = getZFloatingPlatformY(SCENE2_Z_FLOAT_START_X + 220);
+                return (gy != null ? gy : getScene2ArchBridgeDeckY()) - 100;
+            },
+            sizeH: height * 0.11
+        }
+    ];
+
+    hints.forEach((h, i) => {
+        if (!h.show) return;
+        const img = images[h.key];
+        if (!isImageReady(img)) return;
+        const wx = h.x;
+        const sx = wx - camera.x;
+        if (sx < -180 || sx > width + 180) return;
+        const baseY = h.y();
+        if (!Number.isFinite(baseY) || baseY > height + 1000) return;
+        const floatY = baseY + Math.sin(t + i * 1.2) * 6;
+        const ih = h.sizeH;
+        const iw = ih * (img.width / img.height);
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = "rgba(255,255,255,0.7)";
+        ctx.drawImage(img, sx - iw * 0.5, floatY - ih, iw, ih);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    });
+}
+
 
 function drawOrganicBranch(v) {
     const vx = v.x - camera.x; if(vx < -200 || vx > width + 200) return;
     const gy = getGroundHeight(v.x, 9999);
     if (gy > height + 1000) return;
+    const baseGroundY = height - groundH;
+    if (transition.scene2Blend > 0.01) {
+        // 第二关白色曲线树木不出现在断桥/悬浮空域
+        if (v.x >= SCENE2_BROKEN_PLATFORM_START_X) return;
+    } else {
+        // 第一关黑色曲线树木不出现在空中与障碍手上
+        if (gy < baseGroundY - 140) return;
+        if (getHandObstacleY(v.x) != null) return;
+    }
     const t = transition.scene2Blend;
     const branchColor = t > 0 ? lerpColor("000000", "ffffff", t) : "#000";
     const slopeSinkY = (v.x >= SCENE2_RAMP_START_X) ? 12 : 0;
@@ -3563,7 +6171,7 @@ function drawVoidFallBg0Only() {
     }
 }
 
-/** 下坠段氛围：上深黑、下微紫，贴近参考竖线流星底衬 */
+/** 下坠段氛围：上深黑、下微紫，贴近参考竖线流星底�?*/
 function drawVoidFallDepthGradient() {
     const g = ctx.createLinearGradient(0, 0, 0, height);
     g.addColorStop(0, 'rgba(0,0,0,0.42)');
@@ -3656,9 +6264,7 @@ function getEyeBlinkOpen(nowMs) {
 }
 
 /**
- * 屏幕正中的几何「眼」：同心圆 + 中心品红晕 + 水平轴 + 虚线外环；眨眼表现为整体缩放/透明度。
- * fadeMul：渐显；close01：落地后闭合为线并消失；nowMs：眨眼时钟。
- */
+ * 屏幕正中的几何「眼」：同心�?+ 中心品红�?+ 水平�?+ 虚线外环；眨眼表现为整体缩放/透明度�? * fadeMul：渐显；close01：落地后闭合为线并消失；nowMs：眨眼时钟�? */
 function drawGiantVoidEyeScreenCenter(fadeMul, close01, nowMs) {
     if (fadeMul <= 0.02) return;
     const pClose = Math.max(0, close01 || 0);
@@ -3753,6 +6359,12 @@ function drawGiantVoidEyeScreenCenter(fadeMul, close01, nowMs) {
 }
 
 function draw() {
+    sanitizeCameraState();
+    // 高清渲染管线：在固定逻辑坐标系上进行 3x 像素绘制
+    ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+
     if (voidFall.phase === 'falling') {
         const fel = performance.now() - voidFall.startTime;
         const totalShake = transition.shake + camera.shakeLand;
@@ -3796,15 +6408,19 @@ function draw() {
         ctx.scale(camera.zoom, camera.zoom);
         ctx.translate(-width / 2, -height / 2 - camera.y);
         drawLandingDustWorld();
+        drawDownhillDustWorld();
         drawVoidCapeBehindPlayer();
         const pImgsV = images[player.state];
         if (pImgsV && pImgsV[player.frame] && isImageReady(pImgsV[player.frame])) {
             const curImg = pImgsV[player.frame], px = player.x - camera.x + player.width / 2, py = player.y + player.height / 2;
+            const { drawW, drawH } = getPlayerDrawSize(curImg, player.state);
+            const footOffset = getPlayerFootOffsetByState(player.state);
+            const topY = player.height * 0.5 - drawH + player.height * footOffset;
             ctx.save();
             ctx.translate(px, py);
             ctx.rotate(player.rotation + fallRot);
             ctx.scale(player.facing * fallSx, fallSy * squatY);
-            ctx.drawImage(curImg, -player.width / 2, -player.height / 2, player.width, player.height);
+            ctx.drawImage(curImg, -drawW / 2, topY, drawW, drawH);
             ctx.restore();
         }
         ctx.restore();
@@ -3813,6 +6429,8 @@ function draw() {
 
     ctx.fillStyle = SKY_COLOR; ctx.fillRect(0, 0, width, height);
     if (isImageReady(images.bg)) ctx.drawImage(images.bg, 0, 0, width, height);
+    drawScene1Clouds();
+    drawMidHillSun();
     if (transition.scene2Blend > 0.001 && isImageReady(images.bg1)) {
         ctx.globalAlpha = transition.scene2Blend;
         ctx.drawImage(images.bg1, 0, 0, width, height);
@@ -3841,7 +6459,7 @@ function draw() {
         const cy = (typeof r.y === 'number') ? (r.y - camera.y) : (height / 2);
         const lw = r.lineW || 1.5;
         ctx.save();
-        // 模糊外环（柔光层）
+        // 模糊外环（柔光层
         ctx.strokeStyle = `rgba(255,245,248,${Math.max(0, r.alpha * 0.32)})`;
         ctx.lineWidth = lw * (1.9 + (r.glowMul || 1) * 0.15);
         ctx.shadowBlur = 12;
@@ -3850,7 +6468,7 @@ function draw() {
         ctx.arc(cx, cy, r.r + 0.6, 0, Math.PI * 2);
         ctx.stroke();
 
-        // 核心细线环
+        // 核心细线
         ctx.strokeStyle = `rgba(255,245,248,${r.alpha})`;
         ctx.lineWidth = lw;
         ctx.shadowBlur = 6;
@@ -3888,7 +6506,7 @@ function draw() {
     const shakeY = (Math.random() - 0.5) * shakeTotal * 0.8;
     ctx.translate(width/2 + shakeX, height/2 + shakeY); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-width/2, -height/2 - camera.y);
 
-    // 两关都保留线条山脉（第二关会按 blend 改变配色）
+    // 两关都保留线条山脉（第二关会�?blend 改变配色
     const mtH11 = height * 0.04, mtH15 = height * 0.12;
     for (let i = 0; i < 10; i++) {
         const speed = i < 6 ? 0.008 + i * 0.01 : 0.08 + (i - 6) * 0.06;
@@ -3925,12 +6543,16 @@ function draw() {
     drawScene2RuinMid();
     drawScene2PlatformColumns();
     
-    // ✨ 远景/中景武器渲染
+    // �?远景/中景武器渲染
     weapons.filter(w => w.depth > 0.3).forEach(drawWeapon);
 
     skyStairs.forEach(drawSkyStair);
+    drawScene1TransitionTreeAt30152();
     ctx.fillStyle = transition.scene2Blend > 0 ? lerpColor("000000", "ffffff", transition.scene2Blend) : "#000";
     ctx.fillRect(camera.x - 50000, height - groundH, 250000, height * 20);
+    // 50000 之后地面强制白色
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(50000 - camera.x, height - groundH, 250000, height * 20);
     if (player.x >= SCENE2_RAMP_START_X - width) {
         ctx.fillStyle = "rgba(255,255,255,1)";
         ctx.beginPath();
@@ -3940,26 +6562,20 @@ function draw() {
         const rampDrawFarY = scene2RampEdgeYVisual(SCENE2_RAMP_START_X + width * SCENE2_RAMP_DRAW_EXTEND);
         const revealEase = getRampPlatformReveal01();
 
-        // 1. 回到地平线起点深处
+        // 1. 回到地平线起点深
         ctx.moveTo(startX, height + 5000); 
-        // 2. 连接到斜坡起点
+        // 2. 连接到斜坡起
         ctx.lineTo(startX, startY); 
 
-        if (scene2Ramp.flatUnlocked && revealEase >= 0.995) {
+        if (scene2Ramp.flatUnlocked) {
             const flatX = scene2Ramp.flatStartX - camera.x;
             const platformExtend = width * SCENE2_RAMP_DRAW_EXTEND * revealEase;
             const platformEndX = Math.min(flatX + platformExtend, SCENE2_ARCH_BRIDGE_START_X - camera.x);
             appendRampEdgePath(ctx, SCENE2_RAMP_START_X, scene2Ramp.flatStartX);
-            // 3. 连到山顶边缘
-            // 4. 平地向右延伸
-            ctx.lineTo(platformEndX, scene2Ramp.flatY); 
-            // 5. 沉入极深地底（向右下方收尾）
-            ctx.lineTo(platformEndX, height + 5000); 
+            ctx.lineTo(platformEndX, scene2Ramp.flatY);
+            ctx.lineTo(platformEndX, height + 5000);
         } else {
-            // 还在爬坡中，画一个向右无限延伸的缓坡
-            // 3. 连到远方边缘
             appendRampEdgePath(ctx, SCENE2_RAMP_START_X, SCENE2_RAMP_START_X + width * SCENE2_RAMP_DRAW_EXTEND);
-            // 4. 沉入极深地底（向右下方收尾）
             ctx.lineTo(rampDrawFarX, height + 5000);
         }
         ctx.closePath();
@@ -3980,7 +6596,7 @@ function draw() {
             ctx.fill();
         }
 
-        // 斜坡内部“窗洞”细节：用背景色模拟镂空，形成可透背景的孔洞感
+        // 斜坡内部“窗洞”细节：用背景色模拟镂空，形成可透背景的孔洞
         const holeWorldX = SCENE2_RAMP_START_X + width * 0.9;
         const holeX = holeWorldX - camera.x;
         const holeY = scene2RampEdgeYVisual(holeWorldX) + height * 0.12;
@@ -3997,7 +6613,7 @@ function draw() {
         ctx.lineWidth = 1.1;
         ctx.stroke();
 
-        // 斜坡纹理：粉灰污渍 + 裂纹线（贴近参考图的纸面破裂感）
+        // 斜坡纹理：粉灰污�?+ 裂纹线（贴近参考图的纸面破裂感
         const rand01 = (n) => {
             const v = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
             return v - Math.floor(v);
@@ -4048,9 +6664,9 @@ function draw() {
             ctx.stroke();
         });
 
-        // 斜坡边缘矩形锯齿：用小矩形拼出“台阶边”质感
-        const edgeEndX = (scene2Ramp.flatUnlocked && revealEase >= 0.995) ? (scene2Ramp.flatStartX - camera.x) : rampDrawFarX;
-        const edgeEndY = (scene2Ramp.flatUnlocked && revealEase >= 0.995) ? scene2Ramp.flatY : rampDrawFarY;
+        // 斜坡边缘矩形锯齿：用小矩形拼出“台阶边”质
+        const edgeEndX = scene2Ramp.flatUnlocked ? (scene2Ramp.flatStartX - camera.x) : rampDrawFarX;
+        const edgeEndY = scene2Ramp.flatUnlocked ? scene2Ramp.flatY : rampDrawFarY;
         const edgeDx = edgeEndX - startX;
         const edgeDy = edgeEndY - startY;
         const edgeLen = Math.hypot(edgeDx, edgeDy);
@@ -4070,12 +6686,12 @@ function draw() {
             ctx.restore();
         }
 
-        // 画一条边缘线强调踩踏感
+        // 画一条边缘线强调踩踏
         ctx.strokeStyle = "rgba(220,220,225,0.8)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(startX, startY);
-        if (scene2Ramp.flatUnlocked && revealEase >= 0.995) {
+        if (scene2Ramp.flatUnlocked) {
             const flatX = scene2Ramp.flatStartX - camera.x;
             const platformExtend = width * SCENE2_RAMP_DRAW_EXTEND * revealEase;
             const platformEndX = Math.min(flatX + platformExtend, SCENE2_ARCH_BRIDGE_START_X - camera.x);
@@ -4100,30 +6716,118 @@ function draw() {
     }
     drawArchBridge();
     drawBrokenBridgePlatforms();
+    drawGiantStatueScene2();
+    drawGiantStardustPath();
     drawZFloatingPlatforms();
     drawZFloatingOrganicTrees();
     // 放在白色斜坡地形之后绘制，避免被地形填充遮住
     drawRampTurnpointSymBuilding();
+    drawEndpointForearmPlatformBack();
+    drawEndpointTwinStatues();
     drawSnowAndFlowers();
     drawFloatingShards(false);
 
     const pts2 = getTerrainPoints();
     const terrainBaseY = height - groundH;
     const seamFixY = terrainBaseY + 2;
+    ctx.fillStyle = transition.scene2Blend < 0.01 ? "#000000" : "#ffffff";
     ctx.beginPath(); ctx.moveTo(pts2.start-camera.x, terrainBaseY); ctx.lineTo(pts2.peak-camera.x, terrainBaseY-pts2.h); ctx.lineTo(pts2.end-camera.x, terrainBaseY); ctx.fill();
     const mH = terrainParams.midHill; ctx.beginPath(); ctx.moveTo(mH.x-camera.x, seamFixY); ctx.lineTo(mH.x+mH.w*0.5-camera.x, terrainBaseY-mH.h); ctx.lineTo(mH.x+mH.w-camera.x, seamFixY); ctx.fill();
-    const b3 = terrainParams; ctx.beginPath(); ctx.moveTo(b3.bX3-camera.x, height-groundH); ctx.lineTo(b3.bX3+b3.peakOffset3-camera.x, height-groundH-b3.h3); ctx.lineTo(b3.bX3+b3.w3-camera.x, height-groundH); ctx.fill();
+    // 已移除“第二个高地（b3）”地形绘
     const pts4 = getTerrain4Points(); ctx.beginPath(); ctx.moveTo(pts4.start-camera.x, height-groundH); ctx.lineTo(pts4.peak-camera.x, height-groundH-pts4.h); ctx.lineTo(pts4.end-camera.x, height-groundH); ctx.fill();
 
     if (isImageReady(images.building02)) ctx.drawImage(images.building02, terrainParams.b2ImageX - camera.x, height - groundH - height * 1.6 + 45, height * 1.6 * (images.building02.width / images.building02.height), height * 1.6);
-    if (isImageReady(images.building03)) ctx.drawImage(images.building03, b3.bX3-camera.x, height-groundH-b3.h3*2.2+38, b3.h3*2.2*(images.building03.width/images.building03.height), b3.h3*2.2);
-    
-    vegetation.filter(v => !v.isForeground).forEach(drawOrganicBranch);
+    // 已移除集成建�?3绘制
+
+    vegetation.filter(v => !v.isForeground && !isSkyPathForbiddenForProps(v.x)).forEach(drawOrganicBranch);
     drawBirdSwarm();
 
-    // ✨ 交互粒子 1 & 2
-    if (!specialOrb.finalized) { ctx.fillStyle = "#fff"; ctx.shadowBlur = 15; ctx.shadowColor = "#fff"; ctx.beginPath(); ctx.arc(6200-camera.x, height-groundH-pts2.h-50, 6+Math.sin(Date.now()*0.005)*3, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; }
-    if (!specialOrb2.finalized) { ctx.fillStyle = "#fff"; ctx.shadowBlur = 20; ctx.shadowColor = "#fff"; ctx.beginPath(); ctx.arc(specialOrb2.x-camera.x, specialOrb2.y, 8+Math.sin(Date.now()*0.006)*4, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; }
+    // �?交互粒子 1 & 2
+    if (!specialOrb.finalized) {
+        const now = performance.now();
+        const sx = 6200 - camera.x;
+        const sy = height - groundH - pts2.h - 50;
+        const coreR = 6 + Math.sin(now * 0.005) * 3;
+        ctx.fillStyle = "#fff";
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#fff";
+        ctx.beginPath();
+        ctx.arc(sx, sy, coreR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (!specialOrb.triggered) {
+            // 常态：呼吸双环
+            const breath = 0.5 + 0.5 * Math.sin(now * 0.0038);
+            ctx.strokeStyle = `rgba(255,255,255,${0.45 + breath * 0.25})`;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(sx, sy, coreR + 11 + breath * 2.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255,255,255,${0.28 + breath * 0.18})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(sx, sy, coreR + 22 + breath * 3.4, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            // 触碰后：圆环向外扩散并淡出
+            const burstAge = Math.max(0, now - (specialOrb.ringBurstAt || now));
+            const burstT = Math.min(1, burstAge / 780);
+            for (let i = 0; i < 3; i++) {
+                const segT = Math.max(0, Math.min(1, burstT - i * 0.15));
+                if (segT <= 0) continue;
+                const alpha = (1 - segT) * (0.5 - i * 0.1);
+                if (alpha <= 0.01) continue;
+                ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+                ctx.lineWidth = 1.8 - i * 0.35;
+                ctx.beginPath();
+                ctx.arc(sx, sy, coreR + 10 + segT * (20 + i * 8), 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+    }
+    if (!specialOrb2.finalized) {
+        const now = performance.now();
+        const floatY = specialOrb2.y + Math.sin(now * 0.0032) * 4.5;
+        const sx = specialOrb2.x - camera.x;
+        const sy = floatY;
+        const coreR = 8 + Math.sin(now * 0.006) * 3.2;
+        ctx.fillStyle = "#fff";
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "#fff";
+        ctx.beginPath();
+        ctx.arc(sx, sy, coreR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (!specialOrb2.triggered) {
+            const breath = 0.5 + 0.5 * Math.sin(now * 0.0036);
+            ctx.strokeStyle = `rgba(255,255,255,${0.44 + breath * 0.24})`;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(sx, sy, coreR + 10 + breath * 2.8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(255,255,255,${0.28 + breath * 0.18})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(sx, sy, coreR + 21 + breath * 3.5, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            const burstAge = Math.max(0, now - (specialOrb2.ringBurstAt || now));
+            const burstT = Math.min(1, burstAge / 760);
+            for (let i = 0; i < 3; i++) {
+                const segT = Math.max(0, Math.min(1, burstT - i * 0.15));
+                if (segT <= 0) continue;
+                const alpha = (1 - segT) * (0.5 - i * 0.1);
+                if (alpha <= 0.01) continue;
+                ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+                ctx.lineWidth = 1.8 - i * 0.35;
+                ctx.beginPath();
+                ctx.arc(sx, sy, coreR + 9 + segT * (20 + i * 8), 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+    }
     if (!debrisOrb.finalized) {
         const orbSize = 9 + Math.sin(debrisOrb.pulse) * 2.4;
         ctx.fillStyle = "#ffe9ef";
@@ -4136,36 +6840,129 @@ function draw() {
     }
     if (!platformTopOrb.finalized && scene2Ramp.flatUnlocked) {
         const orbSize = 8 + Math.sin(platformTopOrb.pulse) * 2.1;
+        const sx = platformTopOrb.x - camera.x;
+        const sy = platformTopOrb.y;
         ctx.fillStyle = "#ff5f74";
         ctx.shadowBlur = 22;
         ctx.shadowColor = "#ff5f74";
         ctx.beginPath();
-        ctx.arc(platformTopOrb.x - camera.x, platformTopOrb.y, orbSize, 0, Math.PI * 2);
+        ctx.arc(sx, sy, orbSize, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = "rgba(255,160,176,0.8)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, orbSize + 8 + Math.sin(platformTopOrb.pulse * 1.4) * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.shadowBlur = 0;
+    }
+    if (!bridgeLoreEvent.triggered) {
+        const pulse = 9 + Math.sin(bridgeLoreEvent.pulse) * 2.5;
+        const sx = bridgeLoreEvent.x - camera.x;
+        const sy = bridgeLoreEvent.y;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulse + 14, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulse + 26, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 24;
+        ctx.shadowColor = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    if (!endingLoreEvent.triggered) {
+        const pulse = 10 + Math.sin(endingLoreEvent.pulse) * 2.6;
+        const sx = endingLoreEvent.x - camera.x;
+        const sy = endingLoreEvent.y;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulse + 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulse + 30, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 26;
+        ctx.shadowColor = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sx, sy, pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     }
 
     ringParticles.forEach(p => { ctx.globalAlpha = p.alpha; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x-camera.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
     ctx.globalAlpha = 1.0;
 
     if (isImageReady(images.building04)) { const bH4 = pts4.h * 2.3; ctx.drawImage(images.building04, terrainParams.bX4 - 400 - camera.x, height - groundH - bH4 + 50, bH4 * (images.building04.width/images.building04.height), bH4); }
-
+    // b3 大树须在 building04 之后绘制，否则会被建筑贴图（左侧较宽）整块遮
+    if (transition.scene2Blend < 0.01) {
+        const drawB3Tree = (img, worldX, hMul = 1.14) => {
+            if (!isImageReady(img)) return;
+            const tH = height * hMul;
+            const tW = tH * (img.width / Math.max(1, img.height));
+            const tSx = worldX - tW * 0.5 - camera.x;
+            ctx.drawImage(img, tSx, height - groundH - tH, tW, tH);
+        };
+        const drawB3TreeVideo = (videoEl, worldX, hMul = 1.14) => {
+            if (!videoEl || videoEl.readyState < 2) return false;
+            const tH = height * hMul;
+            const tW = tH * (videoEl.videoWidth / Math.max(1, videoEl.videoHeight));
+            const tSx = worldX - tW * 0.5 - camera.x;
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 1.0;
+            ctx.drawImage(videoEl, tSx, height - groundH - tH, tW, tH);
+            ctx.restore();
+            return true;
+        };
+        // 以 tree_02 为锚点；tree_01 放在其左侧 1500
+        const tree02X = terrainParams.bX3 + terrainParams.w3 * 0.42;
+        drawB3Tree(images.b3GiantTree02, tree02X, 1.18);
+        drawB3Tree(images.b3GiantTree01, tree02X - 1500, 1.14);
+        if (b3TreeVideo.active) drawB3TreeVideo(b3TreeVideo.el, tree02X - 1500, 1.14);
+    }
     drawRampTopShadowAndParticles();
+    drawGuideHands();
+    // 山洞背景层：人物后、其他前景层前
+    drawScene1CaveLayer(false);
+    // 山洞内上升白色发光粒子（27040 后自动停止并消失）
+    drawScene1CaveRiseParticles();
 
     const pImgs = images[player.state];
     if (pImgs && pImgs[player.frame] && isImageReady(pImgs[player.frame])) {
         const curImg = pImgs[player.frame], px = player.x-camera.x+player.width/2, py = player.y+player.height/2;
-        ctx.save(); ctx.translate(px, py); ctx.rotate(player.rotation); ctx.scale(player.facing, 1); ctx.drawImage(curImg, -player.width/2, -player.height/2, player.width, player.height); ctx.restore();
+        const { drawW, drawH } = getPlayerDrawSize(curImg, player.state);
+        const footOffset = getPlayerFootOffsetByState(player.state);
+        const topY = player.height * 0.5 - drawH + player.height * footOffset;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(player.rotation); ctx.scale(player.facing, 1); ctx.drawImage(curImg, -drawW/2, topY, drawW, drawH); ctx.restore();
     }
+    // 第一关前景细尘：在人物层之上，形成遮挡感
+    drawScene1ForegroundDust();
+    // 山洞光束层级：人物前面、山洞前景后面
+    drawScene1CaveFollowBeams();
+    // 叶子层级放到人物与树木之上，制造“被风扫过”的覆盖感
+    drawB3LeafBlows();
+    // b3 -> pts4 区间前景遮挡层：放在人物之上
+    drawB3ToPts4ForegroundOccluder();
+    // 山洞前景层：在人物层之上，覆盖人物
+    drawScene1CaveLayer(true);
     drawRampTurnpointColumnsFront();
     drawFloatingShards(true);
 
-    // ✨ 绘制身后跟随的粒子及其白线拖尾
+    // �?绘制身后跟随的粒子及其白线拖
     player.followingParticles.forEach((p, i) => {
         const pulse = Date.now() * 0.004 + (p.seed || i);
         const allWhite = player.followingParticles.length >= 4;
         const coreHue = 358 + Math.sin(pulse) * 6; // red range
-        // 拖尾线
+        // 拖尾
         if(p.trail.length > 2) {
             for (let j = 0; j < p.trail.length - 1; j++) {
                 const aPt = p.trail[j];
@@ -4203,23 +7000,66 @@ function draw() {
         ctx.shadowBlur = 0;
     });
 
-    vegetation.filter(v => v.isForeground).forEach(drawOrganicBranch);
+    vegetation.filter(v => v.isForeground && !isSkyPathForbiddenForProps(v.x)).forEach(drawOrganicBranch);
     drawMountainTrees(mountainTreesNear, 0.82);
     
-    // ✨ 前景武器渲染
+    // �?前景武器渲染
     weapons.filter(w => w.depth <= 0.3).forEach(drawWeapon);
 
     if (transition.scene2Blend < 0.01) {
         stones.sort((a,b)=>b.depth-a.depth).forEach(rock => {
             const rx = rock.x-camera.x, ry = getGroundHeight(rock.x, 9999); if(rx<-300||rx>width+300) return;
-            const base = Math.round(25 + rock.depth * 105);
-            ctx.save(); ctx.translate(rx, ry); ctx.scale(rock.scale, rock.scale); ctx.fillStyle = `rgb(${base},${base},${base})`;
-            ctx.beginPath(); ctx.moveTo(rock.points[0].x, rock.points[0].y); rock.points.forEach(p=>ctx.lineTo(p.x,p.y)); ctx.fill(); ctx.restore();
+            const base = Math.round(28 + rock.depth * 92);
+            ctx.save();
+            ctx.translate(rx, ry);
+            ctx.scale(rock.scale, rock.scale);
+            ctx.rotate(rock.rotation * 0.12);
+
+            const minY = Math.min(...rock.points.map(p => p.y));
+            const maxY = Math.max(...rock.points.map(p => p.y));
+            const grad = ctx.createLinearGradient(0, minY - 6, 0, maxY + 10);
+            grad.addColorStop(0, `rgb(${Math.min(255, base + 26)},${Math.min(255, base + 22)},${Math.min(255, base + 20)})`);
+            grad.addColorStop(0.45, `rgb(${base},${base - 2},${base - 4})`);
+            grad.addColorStop(1, `rgb(${Math.max(0, base - 28)},${Math.max(0, base - 32)},${Math.max(0, base - 36)})`);
+
+            ctx.beginPath();
+            ctx.moveTo(rock.points[0].x, rock.points[0].y);
+            rock.points.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // 边缘高光与轮
+            ctx.strokeStyle = "rgba(255,255,255,0.34)";
+            ctx.lineWidth = 1.0;
+            ctx.stroke();
+
+            // 底部接地阴影
+            ctx.fillStyle = "rgba(20,14,18,0.22)";
+            ctx.beginPath();
+            ctx.ellipse(0, 6, 15, 5.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 切面细节线（低透明
+            ctx.strokeStyle = "rgba(110,96,104,0.22)";
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(-10, -2);
+            ctx.lineTo(8, -6);
+            ctx.lineTo(14, 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-12, 4);
+            ctx.lineTo(-2, 0);
+            ctx.lineTo(9, 5);
+            ctx.stroke();
+            ctx.restore();
         });
     }
-    if (isImageReady(images.ruinsDebris)) { const rdH = 600; ctx.drawImage(images.ruinsDebris, terrainParams.bX5 - camera.x, getGroundHeight(terrainParams.bX5, 9999) - rdH + 10, rdH * (images.ruinsDebris.width / images.ruinsDebris.height), rdH); }
+    // 已按需求移除 lv1_ruins_debris01 绘制
     if (isImageReady(images.hand)) { const hh = height*0.45; ctx.drawImage(images.hand, 1500-camera.x, height-groundH-hh+10, hh*(images.hand.width/images.hand.height), hh); }
     ctx.restore();
+    drawLoreOverlay();
     drawWindDebugHUD();
 }
 
