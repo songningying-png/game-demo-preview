@@ -146,6 +146,45 @@
             pointer-events: none;
             min-width: 220px;
         }
+        #mobile-controls {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 240;
+            pointer-events: none;
+            display: none;
+            padding: 12px 14px 16px;
+            box-sizing: border-box;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .mc-left {
+            display: flex;
+            gap: 10px;
+        }
+        .mc-btn {
+            width: 68px;
+            height: 68px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.45);
+            background: rgba(0,0,0,0.35);
+            color: #fff;
+            font-size: 24px;
+            font-weight: 300;
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mc-btn:active,
+        .mc-btn.active {
+            background: rgba(255,255,255,0.2);
+        }
+        @media (pointer: coarse), (max-width: 900px) {
+            #mobile-controls { display: flex; }
+        }
     </style>
 </head>
 <body>
@@ -199,6 +238,13 @@
 
 <canvas id="gameCanvas"></canvas>
 <div id="audio-debug">audio: waiting user interaction</div>
+<div id="mobile-controls">
+    <div class="mc-left">
+        <button class="mc-btn" data-code="ArrowLeft">◀</button>
+        <button class="mc-btn" data-code="ArrowRight">▶</button>
+    </div>
+    <button class="mc-btn" data-code="Space">⤒</button>
+</div>
 
 <script>
 // --- 全局配置与资�?---
@@ -3400,6 +3446,33 @@ const keys = {};
 let jumpPressedLast = false;
 window.addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Escape') togglePause(); });
 window.addEventListener('keyup', e => keys[e.code] = false);
+
+function setupMobileControls() {
+    const wrap = document.getElementById('mobile-controls');
+    if (!wrap) return;
+    const setKey = (btn, pressed) => {
+        const code = btn?.dataset?.code;
+        if (!code) return;
+        keys[code] = pressed;
+        btn.classList.toggle('active', !!pressed);
+        if (pressed) unlockAudioSystem();
+    };
+    const press = (ev) => {
+        ev.preventDefault();
+        setKey(ev.currentTarget, true);
+    };
+    const release = (ev) => {
+        ev.preventDefault();
+        setKey(ev.currentTarget, false);
+    };
+    wrap.querySelectorAll('.mc-btn').forEach((btn) => {
+        btn.addEventListener('pointerdown', press);
+        btn.addEventListener('pointerup', release);
+        btn.addEventListener('pointercancel', release);
+        btn.addEventListener('pointerleave', release);
+    });
+}
+setupMobileControls();
 
 const audioSys = {
     ctx: null,
